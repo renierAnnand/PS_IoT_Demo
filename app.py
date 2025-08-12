@@ -139,15 +139,57 @@ def load_seed_data():
         empty_tickets.to_csv(tickets_file, index=False)
 
 def load_data_files():
-    """Load all data files."""
-    return {
-        'generators': pd.read_csv(DATA_DIR / "generators.csv"),
-        'customers': pd.read_csv(DATA_DIR / "customers.csv"),
-        'telemetry': pd.read_parquet(DATA_DIR / "telemetry.parquet"),
-        'alerts': pd.read_csv(DATA_DIR / "alerts.csv"),
-        'maintenance': pd.read_csv(DATA_DIR / "maintenance.csv"),
-        'tickets': pd.read_csv(DATA_DIR / "tickets.csv")
-    }
+    """Load all data files with error handling."""
+    data = {}
+    
+    try:
+        data['generators'] = pd.read_csv(DATA_DIR / "generators.csv")
+    except Exception as e:
+        st.warning(f"Error loading generators: {str(e)}")
+        data['generators'] = pd.DataFrame()
+    
+    try:
+        data['customers'] = pd.read_csv(DATA_DIR / "customers.csv")
+    except Exception as e:
+        st.warning(f"Error loading customers: {str(e)}")
+        data['customers'] = pd.DataFrame()
+    
+    try:
+        data['telemetry'] = pd.read_parquet(DATA_DIR / "telemetry.parquet")
+    except Exception as e:
+        # Try to create empty parquet file if it doesn't exist
+        empty_telemetry = pd.DataFrame(columns=[
+            'ts', 'generator_id', 'fuel_pct', 'load_pct', 'temp_c', 
+            'voltage', 'run_hours', 'status', 'lat', 'lon'
+        ])
+        empty_telemetry.to_parquet(DATA_DIR / "telemetry.parquet", index=False)
+        data['telemetry'] = empty_telemetry
+    
+    try:
+        data['alerts'] = pd.read_csv(DATA_DIR / "alerts.csv")
+    except Exception as e:
+        data['alerts'] = pd.DataFrame(columns=[
+            'id', 'generator_id', 'rule', 'severity', 'message', 'ts',
+            'ack_by', 'ack_ts', 'status', 'notes'
+        ])
+    
+    try:
+        data['maintenance'] = pd.read_csv(DATA_DIR / "maintenance.csv")
+    except Exception as e:
+        data['maintenance'] = pd.DataFrame(columns=[
+            'id', 'generator_id', 'type', 'due_by_date', 'due_at_run_hours',
+            'completed_ts', 'assigned_to', 'priority', 'notes'
+        ])
+    
+    try:
+        data['tickets'] = pd.read_csv(DATA_DIR / "tickets.csv")
+    except Exception as e:
+        data['tickets'] = pd.DataFrame(columns=[
+            'id', 'generator_id', 'created_by_role', 'created_ts', 'summary',
+            'status', 'assigned_to', 'parts_suggested'
+        ])
+    
+    return data
 
 def save_telemetry(new_data: pd.DataFrame):
     """Append new telemetry data."""
@@ -204,7 +246,13 @@ class TelemetrySimulator:
     """Real-time telemetry data simulator."""
     
     def __init__(self):
-        self.generators_df = pd.read_csv(DATA_DIR / "generators.csv")
+        try:
+            self.generators_df = pd.read_csv(DATA_DIR / "generators.csv")
+        except Exception as e:
+            st.error(f"Error loading generators data: {str(e)}")
+            self.generators_df = pd.DataFrame()
+            return
+            
         self.config = load_config()
         self.last_telemetry = {}
         self.consecutive_counts = {}  # For alert tracking
@@ -428,27 +476,32 @@ def show_fleet_monitoring():
     if current_time - st.session_state.last_refresh > refresh_interval:
         st.session_state.last_refresh = current_time
         
-        # Generate new telemetry
-        simulator = TelemetrySimulator()
-        new_telemetry = simulator.generate_tick()
-        save_telemetry(new_telemetry)
-        
-        # Check for new alerts
-        new_alerts = simulator.check_alerts(new_telemetry)
-        if new_alerts:
-            # Append new alerts
-            try:
-                existing_alerts = pd.read_csv(DATA_DIR / "alerts.csv")
-            except (FileNotFoundError, pd.errors.EmptyDataError):
-                existing_alerts = pd.DataFrame(columns=[
-                    'id', 'generator_id', 'rule', 'severity', 'message', 'ts',
-                    'ack_by', 'ack_ts', 'status', 'notes'
-                ])
-            combined_alerts = pd.concat([existing_alerts, pd.DataFrame(new_alerts)], ignore_index=True)
-            save_alerts(combined_alerts)
-        
-        # Force rerun to show updated data
-        st.rerun()
+        try:
+            # Generate new telemetry
+            simulator = TelemetrySimulator()
+            if not simulator.generators_df.empty:  # Only run if generators loaded successfully
+                new_telemetry = simulator.generate_tick()
+                save_telemetry(new_telemetry)
+                
+                # Check for new alerts
+                new_alerts = simulator.check_alerts(new_telemetry)
+                if new_alerts:
+                    # Append new alerts
+                    try:
+                        existing_alerts = pd.read_csv(DATA_DIR / "alerts.csv")
+                    except (FileNotFoundError, pd.errors.EmptyDataError):
+                        existing_alerts = pd.DataFrame(columns=[
+                            'id', 'generator_id', 'rule', 'severity', 'message', 'ts',
+                            'ack_by', 'ack_ts', 'status', 'notes'
+                        ])
+                    combined_alerts = pd.concat([existing_alerts, pd.DataFrame(new_alerts)], ignore_index=True)
+                    save_alerts(combined_alerts)
+                
+                # Force rerun to show updated data
+                st.rerun()
+        except Exception as e:
+            st.error(f"Simulation error: {str(e)}. Will retry on next refresh.")
+            # Don't rerun on error to prevent infinite loop
     
     # Load current data
     data = load_data_files()
@@ -504,17 +557,33 @@ def show_fleet_monitoring():
         # Merge generators with latest telemetry
         fleet_status = generators_df.merge(latest_telemetry, left_on='id', right_on='generator_id', how='left')
         
-        # Check if telemetry columns exist after merge
-        telemetry_cols = ['fuel_pct', 'load_pct', 'temp_c', 'voltage', 'run_hours']
-        missing_cols = [col for col in telemetry_cols if col not in fleet_status.columns]
+        # Ensure all required columns exist with proper data types
+        required_columns = {
+            'fuel_pct': 0.0,
+            'load_pct': 0.0,
+            'temp_c': 0.0,
+            'voltage': 0.0,
+            'run_hours': 0.0
+        }
         
-        # Add missing columns with default values
-        for col in missing_cols:
-            fleet_status[col] = 0.0
+        for col, default_val in required_columns.items():
+            if col not in fleet_status.columns:
+                fleet_status[col] = default_val
+            else:
+                # Ensure numeric type and fill NaN values
+                fleet_status[col] = pd.to_numeric(fleet_status[col], errors='coerce').fillna(default_val)
         
-        # Format display columns
-        display_cols = ['id', 'name', 'customer', 'status', 'fuel_pct', 'load_pct', 'temp_c', 'voltage', 'run_hours']
-        fleet_display = fleet_status[display_cols].copy()
+        # Select and format display columns safely
+        base_cols = ['id', 'name', 'customer', 'status']
+        telemetry_cols = list(required_columns.keys())
+        
+        # Create display dataframe
+        fleet_display = pd.DataFrame()
+        for col in base_cols:
+            fleet_display[col] = fleet_status[col]
+        for col in telemetry_cols:
+            fleet_display[col] = fleet_status[col].round(1)
+        
         fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
     else:
         # No telemetry data yet, show generators with placeholder values
@@ -536,18 +605,23 @@ def show_fleet_monitoring():
                                      default=['Running', 'Stopped', 'Fault'])
     with col3:
         customer_filter = st.multiselect("Customer Filter:",
-                                       options=generators_df['customer'].unique(),
-                                       default=generators_df['customer'].unique())
+                                       options=generators_df['customer'].unique().tolist(),
+                                       default=generators_df['customer'].unique().tolist())
     
-    # Apply filters
-    if search_term:
-        mask = (fleet_display['ID'].str.contains(search_term, case=False, na=False) |
-               fleet_display['Name'].str.contains(search_term, case=False, na=False) |
-               fleet_display['Customer'].str.contains(search_term, case=False, na=False))
-        fleet_display = fleet_display[mask]
-    
-    fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
-    fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
+    # Apply filters safely
+    try:
+        if search_term:
+            mask = (fleet_display['ID'].astype(str).str.contains(search_term, case=False, na=False) |
+                   fleet_display['Name'].astype(str).str.contains(search_term, case=False, na=False) |
+                   fleet_display['Customer'].astype(str).str.contains(search_term, case=False, na=False))
+            fleet_display = fleet_display[mask]
+        
+        if status_filter:
+            fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
+        if customer_filter:
+            fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
+    except Exception as e:
+        st.warning(f"Filter error: {str(e)}. Showing unfiltered data.")
     
     # Display table
     st.dataframe(fleet_display, use_container_width=True, hide_index=True)
@@ -813,34 +887,44 @@ def show_live_data_tab(telemetry_df: pd.DataFrame):
         st.info("No telemetry data available.")
         return
     
-    # Latest values
-    latest = telemetry_df.sort_values('ts').iloc[-1]
+    # Latest values - ensure we have the data
+    try:
+        latest = telemetry_df.sort_values('ts').iloc[-1]
+    except (KeyError, IndexError):
+        st.info("No recent telemetry data available.")
+        return
     
     # Live metrics display
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        fuel_color = "🟢" if latest['fuel_pct'] > 50 else "🟡" if latest['fuel_pct'] > 20 else "🔴"
-        st.metric("Fuel Level", f"{latest['fuel_pct']:.1f}%", delta=fuel_color)
+        fuel_val = latest.get('fuel_pct', 0)
+        fuel_color = "🟢" if fuel_val > 50 else "🟡" if fuel_val > 20 else "🔴"
+        st.metric("Fuel Level", f"{fuel_val:.1f}%" if fuel_val > 0 else "N/A", delta=fuel_color)
     
     with col2:
-        load_color = "🟢" if latest['load_pct'] < 80 else "🟡" if latest['load_pct'] < 90 else "🔴"
-        st.metric("Load", f"{latest['load_pct']:.1f}%", delta=load_color)
+        load_val = latest.get('load_pct', 0)
+        load_color = "🟢" if load_val < 80 else "🟡" if load_val < 90 else "🔴"
+        st.metric("Load", f"{load_val:.1f}%" if load_val > 0 else "N/A", delta=load_color)
     
     with col3:
-        temp_color = "🟢" if latest['temp_c'] < 85 else "🟡" if latest['temp_c'] < 95 else "🔴"
-        st.metric("Temperature", f"{latest['temp_c']:.1f}°C", delta=temp_color)
+        temp_val = latest.get('temp_c', 0)
+        temp_color = "🟢" if temp_val < 85 else "🟡" if temp_val < 95 else "🔴"
+        st.metric("Temperature", f"{temp_val:.1f}°C" if temp_val > 0 else "N/A", delta=temp_color)
     
     with col4:
-        volt_color = "🟢" if latest['voltage'] > 12.0 else "🟡" if latest['voltage'] > 11.5 else "🔴"
-        st.metric("Battery", f"{latest['voltage']:.1f}V", delta=volt_color)
+        volt_val = latest.get('voltage', 0)
+        volt_color = "🟢" if volt_val > 12.0 else "🟡" if volt_val > 11.5 else "🔴"
+        st.metric("Battery", f"{volt_val:.1f}V" if volt_val > 0 else "N/A", delta=volt_color)
     
     # Run hours and status
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Run Hours", f"{latest['run_hours']:.1f}h")
+        run_hours_val = latest.get('run_hours', 0)
+        st.metric("Run Hours", f"{run_hours_val:.1f}h" if run_hours_val > 0 else "N/A")
     with col2:
-        st.metric("Last Update", latest['ts'])
+        timestamp_val = latest.get('ts', 'Unknown')
+        st.metric("Last Update", str(timestamp_val))
 
 def show_history_tab(telemetry_df: pd.DataFrame):
     """History charts tab."""
@@ -852,67 +936,79 @@ def show_history_tab(telemetry_df: pd.DataFrame):
     time_range = st.selectbox("Time Range:", ["Last 24 Hours", "Last 7 Days"])
     
     # Filter data
-    now = datetime.now()
-    if time_range == "Last 24 Hours":
-        cutoff = now - timedelta(days=1)
-    else:
-        cutoff = now - timedelta(days=7)
-    
-    telemetry_df['ts'] = pd.to_datetime(telemetry_df['ts'])
-    filtered_df = telemetry_df[telemetry_df['ts'] > cutoff].sort_values('ts')
-    
-    if filtered_df.empty:
-        st.info(f"No data available for {time_range.lower()}.")
+    try:
+        telemetry_df = telemetry_df.copy()
+        telemetry_df['ts'] = pd.to_datetime(telemetry_df['ts'], errors='coerce')
+        
+        now = datetime.now()
+        if time_range == "Last 24 Hours":
+            cutoff = now - timedelta(days=1)
+        else:
+            cutoff = now - timedelta(days=7)
+        
+        filtered_df = telemetry_df[telemetry_df['ts'] > cutoff].sort_values('ts')
+        
+        if filtered_df.empty:
+            st.info(f"No data available for {time_range.lower()}.")
+            return
+    except Exception as e:
+        st.error(f"Error processing telemetry data: {str(e)}")
         return
     
     # Charts
     col1, col2 = st.columns(2)
     
     with col1:
-        # Fuel and Load
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        fig.add_trace(
-            go.Scatter(x=filtered_df['ts'], y=filtered_df['fuel_pct'],
-                      name='Fuel %', line=dict(color='blue')),
-            secondary_y=False,
-        )
-        
-        fig.add_trace(
-            go.Scatter(x=filtered_df['ts'], y=filtered_df['load_pct'],
-                      name='Load %', line=dict(color='green')),
-            secondary_y=True,
-        )
-        
-        fig.update_xaxes(title_text="Time")
-        fig.update_yaxes(title_text="Fuel %", secondary_y=False)
-        fig.update_yaxes(title_text="Load %", secondary_y=True)
-        fig.update_layout(title="Fuel & Load Trends", height=400)
-        
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            # Fuel and Load
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            fig.add_trace(
+                go.Scatter(x=filtered_df['ts'], y=filtered_df['fuel_pct'],
+                          name='Fuel %', line=dict(color='blue')),
+                secondary_y=False,
+            )
+            
+            fig.add_trace(
+                go.Scatter(x=filtered_df['ts'], y=filtered_df['load_pct'],
+                          name='Load %', line=dict(color='green')),
+                secondary_y=True,
+            )
+            
+            fig.update_xaxes(title_text="Time")
+            fig.update_yaxes(title_text="Fuel %", secondary_y=False)
+            fig.update_yaxes(title_text="Load %", secondary_y=True)
+            fig.update_layout(title="Fuel & Load Trends", height=400)
+            
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error creating fuel/load chart: {str(e)}")
     
     with col2:
-        # Temperature and Voltage
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-        
-        fig.add_trace(
-            go.Scatter(x=filtered_df['ts'], y=filtered_df['temp_c'],
-                      name='Temp °C', line=dict(color='red')),
-            secondary_y=False,
-        )
-        
-        fig.add_trace(
-            go.Scatter(x=filtered_df['ts'], y=filtered_df['voltage'],
-                      name='Voltage V', line=dict(color='orange')),
-            secondary_y=True,
-        )
-        
-        fig.update_xaxes(title_text="Time")
-        fig.update_yaxes(title_text="Temperature °C", secondary_y=False)
-        fig.update_yaxes(title_text="Voltage V", secondary_y=True)
-        fig.update_layout(title="Temperature & Voltage", height=400)
-        
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            # Temperature and Voltage
+            fig = make_subplots(specs=[[{"secondary_y": True}]])
+            
+            fig.add_trace(
+                go.Scatter(x=filtered_df['ts'], y=filtered_df['temp_c'],
+                          name='Temp °C', line=dict(color='red')),
+                secondary_y=False,
+            )
+            
+            fig.add_trace(
+                go.Scatter(x=filtered_df['ts'], y=filtered_df['voltage'],
+                          name='Voltage V', line=dict(color='orange')),
+                secondary_y=True,
+            )
+            
+            fig.update_xaxes(title_text="Time")
+            fig.update_yaxes(title_text="Temperature °C", secondary_y=False)
+            fig.update_yaxes(title_text="Voltage V", secondary_y=True)
+            fig.update_layout(title="Temperature & Voltage", height=400)
+            
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error creating temperature/voltage chart: {str(e)}")
     
     # Export options
     st.subheader("📄 Export Reports")
@@ -920,13 +1016,16 @@ def show_history_tab(telemetry_df: pd.DataFrame):
     
     with col1:
         if st.button("Export CSV"):
-            csv_data = filtered_df.to_csv(index=False)
-            st.download_button(
-                label="Download CSV",
-                data=csv_data,
-                file_name=f"generator_data_{time_range.replace(' ', '_').lower()}.csv",
-                mime="text/csv"
-            )
+            try:
+                csv_data = filtered_df.to_csv(index=False)
+                st.download_button(
+                    label="Download CSV",
+                    data=csv_data,
+                    file_name=f"generator_data_{time_range.replace(' ', '_').lower()}.csv",
+                    mime="text/csv"
+                )
+            except Exception as e:
+                st.error(f"Error creating CSV: {str(e)}")
     
     with col2:
         if st.button("Export PDF"):
@@ -942,39 +1041,51 @@ def show_generator_alerts_tab(alerts_df: pd.DataFrame, generator_id: str):
         st.info("No alerts for this generator.")
         return
     
-    # Alert timeline
-    alerts_df['ts'] = pd.to_datetime(alerts_df['ts'])
-    alerts_df = alerts_df.sort_values('ts', ascending=False)
-    
-    for _, alert in alerts_df.head(10).iterrows():
-        severity_color = {
-            'CRITICAL': '#dc3545',
-            'WARN': '#ffc107',
-            'INFO': '#17a2b8'
-        }.get(alert['severity'], '#6c757d')
+    try:
+        # Alert timeline
+        alerts_df = alerts_df.copy()
+        alerts_df['ts'] = pd.to_datetime(alerts_df['ts'], errors='coerce')
+        alerts_df = alerts_df.sort_values('ts', ascending=False)
         
-        with st.container():
-            col1, col2, col3 = st.columns([2, 1, 1])
+        for _, alert in alerts_df.head(10).iterrows():
+            severity_color = {
+                'CRITICAL': '#dc3545',
+                'WARN': '#ffc107',
+                'INFO': '#17a2b8'
+            }.get(alert.get('severity', 'INFO'), '#6c757d')
             
-            with col1:
-                st.markdown(f"**<span style='color: {severity_color}'>{alert['severity']}</span>** - {alert['rule']}")
-                st.write(alert['message'])
-                st.caption(f"Time: {alert['ts']}")
-            
-            with col2:
-                if alert['ack_by']:
-                    st.success("✓ Acknowledged")
-                    st.caption(f"By: {alert['ack_by']}")
-                else:
-                    if st.button("Acknowledge", key=f"gen_ack_{alert['id']}"):
-                        st.success("Alert acknowledged!")
-            
-            with col3:
-                notes = st.text_input("Notes:", key=f"notes_{alert['id']}", placeholder="Add notes...")
-                if st.button("Save", key=f"save_{alert['id']}"):
-                    st.success("Notes saved!")
-            
-            st.markdown("---")
+            with st.container():
+                col1, col2, col3 = st.columns([2, 1, 1])
+                
+                with col1:
+                    severity = alert.get('severity', 'INFO')
+                    rule = alert.get('rule', 'Unknown')
+                    message = alert.get('message', 'No message')
+                    timestamp = alert.get('ts', 'Unknown time')
+                    
+                    st.markdown(f"**<span style='color: {severity_color}'>{severity}</span>** - {rule}")
+                    st.write(message)
+                    st.caption(f"Time: {timestamp}")
+                
+                with col2:
+                    ack_by = alert.get('ack_by', '')
+                    if ack_by:
+                        st.success("✓ Acknowledged")
+                        st.caption(f"By: {ack_by}")
+                    else:
+                        if st.button("Acknowledge", key=f"gen_ack_{alert.get('id', 'unknown')}"):
+                            st.success("Alert acknowledged!")
+                
+                with col3:
+                    alert_id = alert.get('id', 'unknown')
+                    notes = st.text_input("Notes:", key=f"notes_{alert_id}", placeholder="Add notes...")
+                    if st.button("Save", key=f"save_{alert_id}"):
+                        st.success("Notes saved!")
+                
+                st.markdown("---")
+    except Exception as e:
+        st.error(f"Error displaying alerts: {str(e)}")
+        st.info("There may be an issue with the alert data format.")
 
 def show_service_portal():
     """Business/Service portal page."""
