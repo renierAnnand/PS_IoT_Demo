@@ -157,10 +157,10 @@ def load_manufacturer_data():
     if not generators_file.exists():
         generators_data = {
             'serial_number': [f'PS-{2020 + i//4}-{i:04d}' for i in range(1, 31)],  # Power System serial numbers
-            'model_series': [
+            'model_series': ([
                 'PS-2000 Series', 'PS-1500 Series', 'PS-1000 Series', 'PS-800 Series',
                 'PS-2500 Industrial', 'PS-2000 Commercial', 'PS-1800 Healthcare', 'PS-1200 Retail'
-            ] * 4,  # Repeat pattern
+            ] * 4)[:30],  # Ensure exactly 30 items
             'customer_name': [
                 'King Faisal Medical City', 'Riyadh Mall Complex', 'SABIC Industrial', 'ARAMCO Office Tower',
                 'Al Rajhi Banking HQ', 'STC Data Center', 'NEOM Construction', 'Red Sea Project',
