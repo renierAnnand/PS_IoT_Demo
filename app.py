@@ -305,7 +305,13 @@ class TelemetrySimulator:
     def check_alerts(self, telemetry_df: pd.DataFrame) -> List[Dict]:
         """Check telemetry for alert conditions."""
         new_alerts = []
-        alert_id_counter = len(pd.read_csv(DATA_DIR / "alerts.csv")) + 1
+        
+        # Get current alert count safely
+        try:
+            existing_alerts = pd.read_csv(DATA_DIR / "alerts.csv")
+            alert_id_counter = len(existing_alerts) + 1
+        except (FileNotFoundError, pd.errors.EmptyDataError):
+            alert_id_counter = 1
         
         for _, row in telemetry_df.iterrows():
             gen_id = row['generator_id']
@@ -431,7 +437,13 @@ def show_fleet_monitoring():
         new_alerts = simulator.check_alerts(new_telemetry)
         if new_alerts:
             # Append new alerts
-            existing_alerts = pd.read_csv(DATA_DIR / "alerts.csv")
+            try:
+                existing_alerts = pd.read_csv(DATA_DIR / "alerts.csv")
+            except (FileNotFoundError, pd.errors.EmptyDataError):
+                existing_alerts = pd.DataFrame(columns=[
+                    'id', 'generator_id', 'rule', 'severity', 'message', 'ts',
+                    'ack_by', 'ack_ts', 'status', 'notes'
+                ])
             combined_alerts = pd.concat([existing_alerts, pd.DataFrame(new_alerts)], ignore_index=True)
             save_alerts(combined_alerts)
         
@@ -487,85 +499,102 @@ def show_fleet_monitoring():
     # Fleet Table
     st.subheader("🚛 Fleet Status")
     
+    # Always show generators, even without telemetry
     if not telemetry_df.empty:
         # Merge generators with latest telemetry
         fleet_status = generators_df.merge(latest_telemetry, left_on='id', right_on='generator_id', how='left')
+        
+        # Check if telemetry columns exist after merge
+        telemetry_cols = ['fuel_pct', 'load_pct', 'temp_c', 'voltage', 'run_hours']
+        missing_cols = [col for col in telemetry_cols if col not in fleet_status.columns]
+        
+        # Add missing columns with default values
+        for col in missing_cols:
+            fleet_status[col] = 0.0
         
         # Format display columns
         display_cols = ['id', 'name', 'customer', 'status', 'fuel_pct', 'load_pct', 'temp_c', 'voltage', 'run_hours']
         fleet_display = fleet_status[display_cols].copy()
         fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
+    else:
+        # No telemetry data yet, show generators with placeholder values
+        fleet_display = generators_df[['id', 'name', 'customer', 'status']].copy()
+        fleet_display['Fuel %'] = 'N/A'
+        fleet_display['Load %'] = 'N/A'
+        fleet_display['Temp °C'] = 'N/A'
+        fleet_display['Battery V'] = 'N/A'
+        fleet_display['Run Hours'] = 'N/A'
+        fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
         
-        # Add search and filter
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            search_term = st.text_input("🔍 Search:", placeholder="Generator, Customer, Location...")
-        with col2:
-            status_filter = st.multiselect("Status Filter:", 
-                                         options=['Running', 'Stopped', 'Fault'],
-                                         default=['Running', 'Stopped', 'Fault'])
-        with col3:
-            customer_filter = st.multiselect("Customer Filter:",
-                                           options=generators_df['customer'].unique(),
-                                           default=generators_df['customer'].unique())
-        
-        # Apply filters
-        if search_term:
-            mask = (fleet_display['ID'].str.contains(search_term, case=False, na=False) |
-                   fleet_display['Name'].str.contains(search_term, case=False, na=False) |
-                   fleet_display['Customer'].str.contains(search_term, case=False, na=False))
-            fleet_display = fleet_display[mask]
-        
-        fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
-        fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
-        
-        # Display table
-        st.dataframe(fleet_display, use_container_width=True, hide_index=True)
+    # Add search and filter
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        search_term = st.text_input("🔍 Search:", placeholder="Generator, Customer, Location...")
+    with col2:
+        status_filter = st.multiselect("Status Filter:", 
+                                     options=['Running', 'Stopped', 'Fault'],
+                                     default=['Running', 'Stopped', 'Fault'])
+    with col3:
+        customer_filter = st.multiselect("Customer Filter:",
+                                       options=generators_df['customer'].unique(),
+                                       default=generators_df['customer'].unique())
+    
+    # Apply filters
+    if search_term:
+        mask = (fleet_display['ID'].str.contains(search_term, case=False, na=False) |
+               fleet_display['Name'].str.contains(search_term, case=False, na=False) |
+               fleet_display['Customer'].str.contains(search_term, case=False, na=False))
+        fleet_display = fleet_display[mask]
+    
+    fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
+    fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
+    
+    # Display table
+    st.dataframe(fleet_display, use_container_width=True, hide_index=True)
     
     # Fleet Map
     st.subheader("🗺️ Fleet Map")
     
-    if not generators_df.empty:
-        # Prepare map data
-        map_data = generators_df.copy()
-        
-        # Add status colors
-        status_colors = {
-            'Running': [0, 255, 0, 160],    # Green
-            'Stopped': [255, 255, 0, 160],  # Yellow  
-            'Fault': [255, 0, 0, 160]       # Red
+    # Prepare map data
+    map_data = generators_df.copy()
+    
+    # Add status colors
+    status_colors = {
+        'Running': [0, 255, 0, 160],    # Green
+        'Stopped': [255, 255, 0, 160],  # Yellow  
+        'Fault': [255, 0, 0, 160]       # Red
+    }
+    map_data['color'] = map_data['status'].map(status_colors)
+    
+    # Create pydeck map
+    view_state = pdk.ViewState(
+        latitude=map_data['lat'].mean(),
+        longitude=map_data['lon'].mean(),
+        zoom=6,
+        pitch=0
+    )
+    
+    layer = pdk.Layer(
+        'ScatterplotLayer',
+        data=map_data,
+        get_position=['lon', 'lat'],
+        get_color='color',
+        get_radius=15000,
+        pickable=True,
+        auto_highlight=True
+    )
+    
+    deck = pdk.Deck(
+        map_style='mapbox://styles/mapbox/light-v9',
+        initial_view_state=view_state,
+        layers=[layer],
+        tooltip={
+            'html': '<b>{name}</b><br/>Status: {status}<br/>Customer: {customer}<br/>Model: {model}',
+            'style': {'backgroundColor': 'steelblue', 'color': 'white'}
         }
-        map_data['color'] = map_data['status'].map(status_colors)
-        
-        # Create pydeck map
-        view_state = pdk.ViewState(
-            latitude=map_data['lat'].mean(),
-            longitude=map_data['lon'].mean(),
-            zoom=6,
-            pitch=0
-        )
-        
-        layer = pdk.Layer(
-            'ScatterplotLayer',
-            data=map_data,
-            get_position=['lon', 'lat'],
-            get_color='color',
-            get_radius=15000,
-            pickable=True,
-            auto_highlight=True
-        )
-        
-        deck = pdk.Deck(
-            map_style='mapbox://styles/mapbox/light-v9',
-            initial_view_state=view_state,
-            layers=[layer],
-            tooltip={
-                'html': '<b>{name}</b><br/>Status: {status}<br/>Customer: {customer}<br/>Model: {model}',
-                'style': {'backgroundColor': 'steelblue', 'color': 'white'}
-            }
-        )
-        
-        st.pydeck_chart(deck)
+    )
+    
+    st.pydeck_chart(deck)
 
 def show_alerts_page():
     """Alerts and notifications page."""
@@ -616,9 +645,11 @@ def show_alerts_page():
     with col2:
         status_filter = st.selectbox("Status:", ['All', 'OPEN', 'ACKNOWLEDGED', 'CLOSED'])
     with col3:
-        rule_filter = st.multiselect("Rule Type:",
-                                   alerts_df['rule'].unique() if not alerts_df.empty else [],
-                                   default=alerts_df['rule'].unique() if not alerts_df.empty else [])
+        if not alerts_df.empty:
+            available_rules = alerts_df['rule'].unique()
+        else:
+            available_rules = []
+        rule_filter = st.multiselect("Rule Type:", available_rules, default=available_rules)
     
     # Filter alerts
     filtered_alerts = alerts_df.copy() if not alerts_df.empty else pd.DataFrame()
