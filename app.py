@@ -143,9 +143,18 @@ def load_data_files():
     
     try:
         data['generators'] = pd.read_csv(DATA_DIR / "generators.csv")
+        if data['generators'].empty:
+            st.warning("Generators file is empty. Regenerating...")
+            load_seed_data()  # Regenerate if empty
+            data['generators'] = pd.read_csv(DATA_DIR / "generators.csv")
     except Exception as e:
-        st.warning(f"Error loading generators: {str(e)}")
-        data['generators'] = pd.DataFrame()
+        st.warning(f"Error loading generators: {str(e)}. Regenerating...")
+        load_seed_data()  # Regenerate on error
+        try:
+            data['generators'] = pd.read_csv(DATA_DIR / "generators.csv")
+        except Exception as e2:
+            st.error(f"Failed to regenerate generators: {str(e2)}")
+            data['generators'] = pd.DataFrame()
     
     try:
         data['customers'] = pd.read_csv(DATA_DIR / "customers.csv")
@@ -514,13 +523,42 @@ def show_fleet_monitoring():
     # Load current data
     data = load_data_files()
     
+    # Debug information (remove in production)
+    generators_df = data['generators']
+    telemetry_df = data['telemetry']
+    alerts_df = data['alerts']
+    
+    if generators_df.empty:
+        st.error("⚠️ No generator data found! Please check if data files were created properly.")
+        st.info("Try refreshing the page or restarting the application.")
+        
+        # Show debug info
+        with st.expander("Debug Information"):
+            st.write(f"Data directory: {DATA_DIR}")
+            st.write(f"Generator file exists: {(DATA_DIR / 'generators.csv').exists()}")
+            if (DATA_DIR / 'generators.csv').exists():
+                try:
+                    debug_df = pd.read_csv(DATA_DIR / 'generators.csv')
+                    st.write(f"Generator file rows: {len(debug_df)}")
+                    st.write("First few rows:")
+                    st.dataframe(debug_df.head())
+                except Exception as e:
+                    st.write(f"Error reading generator file: {e}")
+            
+            if st.button("🔄 Force Regenerate Data"):
+                try:
+                    # Clear cache and regenerate
+                    load_seed_data()
+                    st.success("Data regenerated! Please refresh the page.")
+                except Exception as e:
+                    st.error(f"Error regenerating data: {e}")
+        return
+    
     # KPI Dashboard
     st.subheader("📊 Live Dashboard KPIs")
     
     # Calculate KPIs safely
-    generators_df = data['generators']
-    telemetry_df = data['telemetry']
-    alerts_df = data['alerts']
+    # (generators_df, telemetry_df, alerts_df already defined above)
     
     # Default values
     online_units = 0
@@ -709,18 +747,23 @@ def show_fleet_monitoring():
             # Prepare map data
             map_data = generators_df.copy()
             
-            # Add status colors
-            status_colors = {
-                'Running': [0, 255, 0, 160],    # Green
-                'Stopped': [255, 255, 0, 160],  # Yellow  
-                'Fault': [255, 0, 0, 160]       # Red
-            }
-            map_data['color'] = map_data['status'].map(status_colors).fillna([128, 128, 128, 160])  # Gray default
+            # Add status colors as separate RGB columns (pydeck format)
+            def get_color_rgb(status):
+                colors = {
+                    'Running': [0, 255, 0, 160],    # Green
+                    'Stopped': [255, 255, 0, 160],  # Yellow  
+                    'Fault': [255, 0, 0, 160]       # Red
+                }
+                return colors.get(status, [128, 128, 128, 160])  # Gray default
+            
+            # Apply colors to each row
+            colors = map_data['status'].apply(get_color_rgb)
+            map_data['color'] = colors.tolist()
             
             # Create pydeck map
             view_state = pdk.ViewState(
-                latitude=map_data['lat'].mean(),
-                longitude=map_data['lon'].mean(),
+                latitude=float(map_data['lat'].mean()),
+                longitude=float(map_data['lon'].mean()),
                 zoom=6,
                 pitch=0
             )
@@ -728,7 +771,7 @@ def show_fleet_monitoring():
             layer = pdk.Layer(
                 'ScatterplotLayer',
                 data=map_data,
-                get_position=['lon', 'lat'],
+                get_position='[lon, lat]',
                 get_color='color',
                 get_radius=15000,
                 pickable=True,
@@ -1330,7 +1373,7 @@ def main():
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
     
-    # Initialize data
+    # Initialize data - call this every time to ensure data exists
     load_seed_data()
     
     # Authentication check
