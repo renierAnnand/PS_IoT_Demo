@@ -58,7 +58,6 @@ def save_config(config: Dict):
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=2)
 
-@st.cache_data
 def load_seed_data():
     """Load or create seed data files."""
     
@@ -192,25 +191,34 @@ def load_data_files():
     return data
 
 def save_telemetry(new_data: pd.DataFrame):
-    """Append new telemetry data."""
-    telemetry_file = DATA_DIR / "telemetry.parquet"
-    if telemetry_file.exists():
-        existing = pd.read_parquet(telemetry_file)
-        combined = pd.concat([existing, new_data], ignore_index=True)
-        # Keep only last 48 hours to prevent file from growing too large
-        cutoff = datetime.now() - timedelta(hours=48)
-        combined = combined[pd.to_datetime(combined['ts']) > cutoff]
-        combined.to_parquet(telemetry_file, index=False)
-    else:
-        new_data.to_parquet(telemetry_file, index=False)
+    """Append new telemetry data with error handling."""
+    try:
+        telemetry_file = DATA_DIR / "telemetry.parquet"
+        if telemetry_file.exists():
+            existing = pd.read_parquet(telemetry_file)
+            combined = pd.concat([existing, new_data], ignore_index=True)
+            # Keep only last 48 hours to prevent file from growing too large
+            cutoff = datetime.now() - timedelta(hours=48)
+            combined = combined[pd.to_datetime(combined['ts']) > cutoff]
+            combined.to_parquet(telemetry_file, index=False)
+        else:
+            new_data.to_parquet(telemetry_file, index=False)
+    except Exception as e:
+        st.error(f"Error saving telemetry: {str(e)}")
 
 def save_alerts(alerts_df: pd.DataFrame):
-    """Save alerts data."""
-    alerts_df.to_csv(DATA_DIR / "alerts.csv", index=False)
+    """Save alerts data with error handling."""
+    try:
+        alerts_df.to_csv(DATA_DIR / "alerts.csv", index=False)
+    except Exception as e:
+        st.error(f"Error saving alerts: {str(e)}")
 
 def save_tickets(tickets_df: pd.DataFrame):
-    """Save tickets data."""
-    tickets_df.to_csv(DATA_DIR / "tickets.csv", index=False)
+    """Save tickets data with error handling."""
+    try:
+        tickets_df.to_csv(DATA_DIR / "tickets.csv", index=False)
+    except Exception as e:
+        st.error(f"Error saving tickets: {str(e)}")
 
 def authenticate():
     """Simple authentication page."""
@@ -509,91 +517,145 @@ def show_fleet_monitoring():
     # KPI Dashboard
     st.subheader("📊 Live Dashboard KPIs")
     
-    # Calculate KPIs
+    # Calculate KPIs safely
     generators_df = data['generators']
     telemetry_df = data['telemetry']
     alerts_df = data['alerts']
     
-    online_units = len(generators_df[generators_df['status'] == 'Running'])
-    total_units = len(generators_df)
-    active_alerts = len(alerts_df[alerts_df['status'] == 'OPEN'])
+    # Default values
+    online_units = 0
+    total_units = 0
+    active_alerts = 0
+    avg_load = 0.0
+    fuel_low_count = 0
     
-    if not telemetry_df.empty:
-        # Get latest telemetry for each generator
-        latest_telemetry = telemetry_df.sort_values('ts').groupby('generator_id').tail(1)
-        avg_load = latest_telemetry['load_pct'].mean()
-        fuel_low_count = len(latest_telemetry[latest_telemetry['fuel_pct'] < 20])
-    else:
-        avg_load = 0
-        fuel_low_count = 0
+    try:
+        if not generators_df.empty and 'status' in generators_df.columns:
+            total_units = len(generators_df)
+            online_units = len(generators_df[generators_df['status'] == 'Running'])
+        
+        if not alerts_df.empty and 'status' in alerts_df.columns:
+            active_alerts = len(alerts_df[alerts_df['status'] == 'OPEN'])
+        
+        if not telemetry_df.empty:
+            # Get latest telemetry for each generator
+            latest_telemetry = telemetry_df.sort_values('ts').groupby('generator_id').tail(1)
+            if 'load_pct' in latest_telemetry.columns:
+                avg_load = latest_telemetry['load_pct'].mean()
+            if 'fuel_pct' in latest_telemetry.columns:
+                fuel_low_count = len(latest_telemetry[latest_telemetry['fuel_pct'] < 20])
+    except Exception as e:
+        st.warning(f"KPI calculation error: {str(e)}. Showing default values.")
     
     # KPI Cards
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        st.metric("Online Units", f"{online_units}/{total_units}", 
-                 delta=f"{online_units/total_units*100:.1f}%")
+        percentage = f"{online_units/total_units*100:.1f}%" if total_units > 0 else "0%"
+        st.metric("Online Units", f"{online_units}/{total_units}", delta=percentage)
     
     with col2:
-        st.metric("Active Alerts", active_alerts, 
-                 delta="🚨" if active_alerts > 0 else "✅")
+        alert_delta = "🚨" if active_alerts > 0 else "✅"
+        st.metric("Active Alerts", active_alerts, delta=alert_delta)
     
     with col3:
         st.metric("Avg Load %", f"{avg_load:.1f}%")
     
     with col4:
-        st.metric("Fuel < 20%", fuel_low_count,
-                 delta="⚠️" if fuel_low_count > 0 else "✅")
+        fuel_delta = "⚠️" if fuel_low_count > 0 else "✅"
+        st.metric("Fuel < 20%", fuel_low_count, delta=fuel_delta)
     
     with col5:
-        st.metric("Auto-Refresh", f"{refresh_interval}s", 
-                 delta=f"Next: {refresh_interval - (current_time - st.session_state.last_refresh):.0f}s")
+        next_refresh = max(0, refresh_interval - (current_time - st.session_state.last_refresh))
+        st.metric("Auto-Refresh", f"{refresh_interval}s", delta=f"Next: {next_refresh:.0f}s")
     
     # Fleet Table
     st.subheader("🚛 Fleet Status")
     
-    # Always show generators, even without telemetry
-    if not telemetry_df.empty:
-        # Merge generators with latest telemetry
-        fleet_status = generators_df.merge(latest_telemetry, left_on='id', right_on='generator_id', how='left')
-        
-        # Ensure all required columns exist with proper data types
-        required_columns = {
-            'fuel_pct': 0.0,
-            'load_pct': 0.0,
-            'temp_c': 0.0,
-            'voltage': 0.0,
-            'run_hours': 0.0
-        }
-        
-        for col, default_val in required_columns.items():
-            if col not in fleet_status.columns:
-                fleet_status[col] = default_val
+    # Initialize fleet_display
+    fleet_display = pd.DataFrame()
+    
+    try:
+        # Always show generators, even without telemetry
+        if not telemetry_df.empty and not generators_df.empty:
+            # Get latest telemetry safely
+            try:
+                latest_telemetry = telemetry_df.sort_values('ts').groupby('generator_id').tail(1)
+            except Exception:
+                latest_telemetry = pd.DataFrame()
+            
+            if not latest_telemetry.empty:
+                # Merge generators with latest telemetry
+                fleet_status = generators_df.merge(latest_telemetry, left_on='id', right_on='generator_id', how='left')
+                
+                # Ensure all required columns exist with proper data types
+                required_columns = {
+                    'fuel_pct': 0.0,
+                    'load_pct': 0.0,
+                    'temp_c': 0.0,
+                    'voltage': 0.0,
+                    'run_hours': 0.0
+                }
+                
+                for col, default_val in required_columns.items():
+                    if col not in fleet_status.columns:
+                        fleet_status[col] = default_val
+                    else:
+                        # Ensure numeric type and fill NaN values
+                        fleet_status[col] = pd.to_numeric(fleet_status[col], errors='coerce').fillna(default_val)
+                
+                # Select and format display columns safely
+                base_cols = ['id', 'name', 'customer', 'status']
+                telemetry_cols = list(required_columns.keys())
+                
+                # Create display dataframe
+                fleet_display = pd.DataFrame()
+                for col in base_cols:
+                    if col in fleet_status.columns:
+                        fleet_display[col] = fleet_status[col]
+                    else:
+                        fleet_display[col] = 'N/A'
+                
+                for col in telemetry_cols:
+                    if col in fleet_status.columns:
+                        fleet_display[col] = fleet_status[col].round(1)
+                    else:
+                        fleet_display[col] = 0.0
+                
+                fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
             else:
-                # Ensure numeric type and fill NaN values
-                fleet_status[col] = pd.to_numeric(fleet_status[col], errors='coerce').fillna(default_val)
-        
-        # Select and format display columns safely
-        base_cols = ['id', 'name', 'customer', 'status']
-        telemetry_cols = list(required_columns.keys())
-        
-        # Create display dataframe
-        fleet_display = pd.DataFrame()
-        for col in base_cols:
-            fleet_display[col] = fleet_status[col]
-        for col in telemetry_cols:
-            fleet_display[col] = fleet_status[col].round(1)
-        
-        fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
-    else:
-        # No telemetry data yet, show generators with placeholder values
-        fleet_display = generators_df[['id', 'name', 'customer', 'status']].copy()
-        fleet_display['Fuel %'] = 'N/A'
-        fleet_display['Load %'] = 'N/A'
-        fleet_display['Temp °C'] = 'N/A'
-        fleet_display['Battery V'] = 'N/A'
-        fleet_display['Run Hours'] = 'N/A'
-        fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
+                # Fallback to basic generator info
+                raise Exception("No latest telemetry available")
+        else:
+            # No telemetry data yet, show generators with placeholder values
+            if not generators_df.empty:
+                fleet_display = generators_df[['id', 'name', 'customer', 'status']].copy()
+                fleet_display['Fuel %'] = 'N/A'
+                fleet_display['Load %'] = 'N/A'
+                fleet_display['Temp °C'] = 'N/A'
+                fleet_display['Battery V'] = 'N/A'
+                fleet_display['Run Hours'] = 'N/A'
+                fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
+            else:
+                st.warning("No generator data available. Please check data files.")
+                return
+    except Exception as e:
+        # Final fallback - create basic display from generators only
+        if not generators_df.empty:
+            try:
+                fleet_display = generators_df[['id', 'name', 'customer', 'status']].copy()
+                fleet_display['Fuel %'] = 'N/A'
+                fleet_display['Load %'] = 'N/A'
+                fleet_display['Temp °C'] = 'N/A'
+                fleet_display['Battery V'] = 'N/A'
+                fleet_display['Run Hours'] = 'N/A'
+                fleet_display.columns = ['ID', 'Name', 'Customer', 'Status', 'Fuel %', 'Load %', 'Temp °C', 'Battery V', 'Run Hours']
+            except Exception as inner_e:
+                st.error(f"Error creating fleet display: {str(inner_e)}")
+                return
+        else:
+            st.warning("No generator data available.")
+            return
         
     # Add search and filter
     col1, col2, col3 = st.columns(3)
@@ -604,71 +666,90 @@ def show_fleet_monitoring():
                                      options=['Running', 'Stopped', 'Fault'],
                                      default=['Running', 'Stopped', 'Fault'])
     with col3:
+        # Get customer options safely
+        try:
+            if not generators_df.empty and 'customer' in generators_df.columns:
+                customer_options = generators_df['customer'].unique().tolist()
+            else:
+                customer_options = []
+        except Exception:
+            customer_options = []
+        
         customer_filter = st.multiselect("Customer Filter:",
-                                       options=generators_df['customer'].unique().tolist(),
-                                       default=generators_df['customer'].unique().tolist())
+                                       options=customer_options,
+                                       default=customer_options)
     
     # Apply filters safely
-    try:
-        if search_term:
-            mask = (fleet_display['ID'].astype(str).str.contains(search_term, case=False, na=False) |
-                   fleet_display['Name'].astype(str).str.contains(search_term, case=False, na=False) |
-                   fleet_display['Customer'].astype(str).str.contains(search_term, case=False, na=False))
-            fleet_display = fleet_display[mask]
-        
-        if status_filter:
-            fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
-        if customer_filter:
-            fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
-    except Exception as e:
-        st.warning(f"Filter error: {str(e)}. Showing unfiltered data.")
+    if not fleet_display.empty:
+        try:
+            if search_term:
+                mask = (fleet_display['ID'].astype(str).str.contains(search_term, case=False, na=False) |
+                       fleet_display['Name'].astype(str).str.contains(search_term, case=False, na=False) |
+                       fleet_display['Customer'].astype(str).str.contains(search_term, case=False, na=False))
+                fleet_display = fleet_display[mask]
+            
+            if status_filter and 'Status' in fleet_display.columns:
+                fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
+            if customer_filter and 'Customer' in fleet_display.columns:
+                fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
+        except Exception as e:
+            st.warning(f"Filter error: {str(e)}. Showing unfiltered data.")
     
     # Display table
-    st.dataframe(fleet_display, use_container_width=True, hide_index=True)
+    if not fleet_display.empty:
+        st.dataframe(fleet_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("No data to display. Waiting for generator information...")
     
     # Fleet Map
     st.subheader("🗺️ Fleet Map")
     
-    # Prepare map data
-    map_data = generators_df.copy()
-    
-    # Add status colors
-    status_colors = {
-        'Running': [0, 255, 0, 160],    # Green
-        'Stopped': [255, 255, 0, 160],  # Yellow  
-        'Fault': [255, 0, 0, 160]       # Red
-    }
-    map_data['color'] = map_data['status'].map(status_colors)
-    
-    # Create pydeck map
-    view_state = pdk.ViewState(
-        latitude=map_data['lat'].mean(),
-        longitude=map_data['lon'].mean(),
-        zoom=6,
-        pitch=0
-    )
-    
-    layer = pdk.Layer(
-        'ScatterplotLayer',
-        data=map_data,
-        get_position=['lon', 'lat'],
-        get_color='color',
-        get_radius=15000,
-        pickable=True,
-        auto_highlight=True
-    )
-    
-    deck = pdk.Deck(
-        map_style='mapbox://styles/mapbox/light-v9',
-        initial_view_state=view_state,
-        layers=[layer],
-        tooltip={
-            'html': '<b>{name}</b><br/>Status: {status}<br/>Customer: {customer}<br/>Model: {model}',
-            'style': {'backgroundColor': 'steelblue', 'color': 'white'}
-        }
-    )
-    
-    st.pydeck_chart(deck)
+    try:
+        if not generators_df.empty and all(col in generators_df.columns for col in ['lat', 'lon', 'status']):
+            # Prepare map data
+            map_data = generators_df.copy()
+            
+            # Add status colors
+            status_colors = {
+                'Running': [0, 255, 0, 160],    # Green
+                'Stopped': [255, 255, 0, 160],  # Yellow  
+                'Fault': [255, 0, 0, 160]       # Red
+            }
+            map_data['color'] = map_data['status'].map(status_colors).fillna([128, 128, 128, 160])  # Gray default
+            
+            # Create pydeck map
+            view_state = pdk.ViewState(
+                latitude=map_data['lat'].mean(),
+                longitude=map_data['lon'].mean(),
+                zoom=6,
+                pitch=0
+            )
+            
+            layer = pdk.Layer(
+                'ScatterplotLayer',
+                data=map_data,
+                get_position=['lon', 'lat'],
+                get_color='color',
+                get_radius=15000,
+                pickable=True,
+                auto_highlight=True
+            )
+            
+            deck = pdk.Deck(
+                map_style='mapbox://styles/mapbox/light-v9',
+                initial_view_state=view_state,
+                layers=[layer],
+                tooltip={
+                    'html': '<b>{name}</b><br/>Status: {status}<br/>Customer: {customer}<br/>Model: {model}',
+                    'style': {'backgroundColor': 'steelblue', 'color': 'white'}
+                }
+            )
+            
+            st.pydeck_chart(deck)
+        else:
+            st.info("Map unavailable - missing generator location data.")
+    except Exception as e:
+        st.warning(f"Error creating map: {str(e)}. Map unavailable.")
 
 def show_alerts_page():
     """Alerts and notifications page."""
