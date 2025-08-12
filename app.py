@@ -1,63 +1,3 @@
-# Cloud-Connected Generator Monitoring Demo
-
-## File: requirements.txt
-```
-streamlit>=1.28.0
-pandas>=2.0.0
-numpy>=1.24.0
-plotly>=5.15.0
-pydeck>=0.8.0
-pyarrow>=12.0.0
-```
-
-## File: README.md
-```markdown
-# Cloud-Connected Generator Monitoring Demo
-
-A real-time Streamlit application demonstrating generator fleet monitoring with business and customer portals.
-
-## Features
-- **Real-time telemetry simulation** with auto-refresh
-- **Role-based access**: Customer vs Business/Service portals
-- **Live alerts engine** with configurable thresholds
-- **Interactive fleet map** and monitoring dashboard
-- **Maintenance management** with risk scoring
-- **Mock CRM/ERP integration** with payload preview
-- **Revenue analytics** and subscription management
-
-## Quick Start
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-## Demo Credentials
-- **Customer Portal**: customer@demo
-- **Business/Service Portal**: service@demo
-
-## Data Storage
-All demo data is persisted in the `data/` directory:
-- `generators.csv` - Fleet inventory
-- `customers.csv` - Customer database  
-- `telemetry.parquet` - Real-time metrics
-- `alerts.csv` - Alert history
-- `maintenance.csv` - Service schedules
-- `tickets.csv` - Service tickets
-- `config.json` - System configuration
-
-## Real-time Simulation
-The app continuously simulates realistic generator telemetry:
-- Fuel consumption patterns
-- Load variations with spikes
-- Temperature correlation with load
-- Battery voltage fluctuations
-- Alert generation from threshold breaches
-
-Navigate between pages using the sidebar. Data updates every 5-10 seconds automatically.
-```
-
-## File: app.py
-```python
 """
 Cloud-Connected Generator Monitoring Demo
 Real-time Streamlit application with role-based access and live simulation.
@@ -579,18 +519,8 @@ def show_fleet_monitoring():
         fleet_display = fleet_display[fleet_display['Status'].isin(status_filter)]
         fleet_display = fleet_display[fleet_display['Customer'].isin(customer_filter)]
         
-        # Color-code the table
-        def color_status(val):
-            if val == 'Running':
-                return 'background-color: #d4edda'
-            elif val == 'Stopped':
-                return 'background-color: #fff3cd'
-            elif val == 'Fault':
-                return 'background-color: #f8d7da'
-            return ''
-        
-        styled_table = fleet_display.style.applymap(color_status, subset=['Status'])
-        st.dataframe(styled_table, use_container_width=True, hide_index=True)
+        # Display table
+        st.dataframe(fleet_display, use_container_width=True, hide_index=True)
     
     # Fleet Map
     st.subheader("🗺️ Fleet Map")
@@ -663,6 +593,20 @@ def show_alerts_page():
         with col4:
             st.metric("Ack Rate", f"{ack_rate:.1f}%")
     
+    # Notifications Log Panel
+    st.subheader("📢 Mock Notifications Log")
+    
+    if 'notification_log' not in st.session_state:
+        st.session_state.notification_log = []
+    
+    # Show notification log
+    if st.session_state.notification_log:
+        with st.expander("Recent Notifications", expanded=True):
+            for notification in reversed(st.session_state.notification_log[-5:]):  # Show last 5
+                st.text(notification)
+    else:
+        st.info("No notifications sent yet.")
+    
     # Alert filters
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -693,20 +637,6 @@ def show_alerts_page():
         
         # Sort by timestamp (newest first)
         filtered_alerts = filtered_alerts.sort_values('ts', ascending=False)
-    
-    # Notifications Log Panel
-    st.subheader("📢 Mock Notifications Log")
-    
-    if 'notification_log' not in st.session_state:
-        st.session_state.notification_log = []
-    
-    # Show notification log
-    if st.session_state.notification_log:
-        with st.expander("Recent Notifications", expanded=True):
-            for notification in reversed(st.session_state.notification_log[-5:]):  # Show last 5
-                st.text(notification)
-    else:
-        st.info("No notifications sent yet.")
     
     # Alert List
     st.subheader("📋 Alert Queue")
@@ -835,7 +765,7 @@ def show_generator_detail():
             st.write(f"**Tier:** {gen_info['subscription_tier']}")
         
         # Tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Live Data", "📈 History", "🚨 Alerts", "🔧 Maintenance"])
+        tab1, tab2, tab3 = st.tabs(["📊 Live Data", "📈 History", "🚨 Alerts"])
         
         with tab1:
             show_live_data_tab(telemetry_df)
@@ -845,9 +775,6 @@ def show_generator_detail():
         
         with tab3:
             show_generator_alerts_tab(alerts_df, selected_gen)
-        
-        with tab4:
-            show_generator_maintenance_tab(data['maintenance'], selected_gen)
 
 def show_live_data_tab(telemetry_df: pd.DataFrame):
     """Live data tab for generator detail."""
@@ -1018,181 +945,6 @@ def show_generator_alerts_tab(alerts_df: pd.DataFrame, generator_id: str):
             
             st.markdown("---")
 
-def show_generator_maintenance_tab(maintenance_df: pd.DataFrame, generator_id: str):
-    """Generator maintenance tab."""
-    gen_maintenance = maintenance_df[maintenance_df['generator_id'] == generator_id]
-    
-    st.subheader("🔧 Maintenance Schedule")
-    
-    if not gen_maintenance.empty:
-        for _, maint in gen_maintenance.iterrows():
-            with st.expander(f"{maint['type']} - {maint['priority']} Priority"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Due Date:** {maint['due_by_date']}")
-                    st.write(f"**Due at Hours:** {maint['due_at_run_hours']}")
-                with col2:
-                    st.write(f"**Assigned:** {maint['assigned_to']}")
-                    st.write(f"**Notes:** {maint['notes']}")
-    else:
-        st.info("No scheduled maintenance for this generator.")
-    
-    # Add maintenance
-    if st.session_state.user_role == "service@demo":
-        with st.expander("Schedule New Maintenance"):
-            with st.form("new_maintenance"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    maint_type = st.selectbox("Type:", 
-                                            ["Preventive", "Corrective", "Emergency", "Inspection"])
-                    due_date = st.date_input("Due Date:")
-                with col2:
-                    due_hours = st.number_input("Due at Run Hours:", min_value=0)
-                    priority = st.selectbox("Priority:", ["Low", "Medium", "High", "Critical"])
-                
-                notes = st.text_area("Notes:")
-                
-                if st.form_submit_button("Schedule Maintenance"):
-                    st.success("Maintenance scheduled!")
-
-def show_maintenance_management():
-    """Maintenance management page (Service role only)."""
-    if st.session_state.user_role != "service@demo":
-        st.error("Access denied. This page is only available to Service personnel.")
-        return
-    
-    st.title("🛠️ Maintenance Management")
-    
-    # Load data
-    data = load_data_files()
-    maintenance_df = data['maintenance']
-    generators_df = data['generators']
-    telemetry_df = data['telemetry']
-    
-    # Risk scoring
-    st.subheader("📊 Predictive Maintenance")
-    
-    # Calculate risk scores
-    risk_scores = []
-    for _, gen in generators_df.iterrows():
-        gen_telemetry = telemetry_df[telemetry_df['generator_id'] == gen['id']]
-        
-        if not gen_telemetry.empty:
-            # Get last 24h average temperature
-            last_24h = gen_telemetry.tail(180)  # Approximately 24h at 8s intervals
-            avg_temp_24h = last_24h['temp_c'].mean() if not last_24h.empty else 70
-            
-            # Calculate risk score (0-100)
-            risk_score = 0
-            
-            # Temperature factor
-            if avg_temp_24h > 85:
-                risk_score += min(30, (avg_temp_24h - 85) * 2)
-            
-            # Overload factor (simplified)
-            overload_minutes = len(last_24h[last_24h['load_pct'] > 90]) * (8/60)  # Convert to minutes
-            risk_score += min(25, overload_minutes * 0.5)
-            
-            # Fuel low events (last 7 days)
-            last_7d = gen_telemetry.tail(756)  # Approximately 7 days
-            fuel_low_events = len(last_7d[last_7d['fuel_pct'] < 20])
-            risk_score += min(20, fuel_low_events * 2)
-            
-            # Battery low events
-            battery_low_events = len(last_7d[last_7d['voltage'] < 11.8])
-            risk_score += min(15, battery_low_events * 3)
-            
-            # Frequent starts (status changes)
-            starts = 0  # Simplified for demo
-            risk_score += min(10, starts)
-            
-            risk_score = min(100, risk_score)
-        else:
-            risk_score = 50  # Default for no data
-        
-        # Suggested parts based on risk factors
-        parts = []
-        if avg_temp_24h > 90:
-            parts.extend(['coolant', 'thermostat'])
-        if overload_minutes > 60:
-            parts.append('AVR_inspection')
-        if battery_low_events > 5:
-            parts.append('battery')
-        if starts > 10:
-            parts.append('starter')
-        
-        risk_scores.append({
-            'generator_id': gen['id'],
-            'name': gen['name'],
-            'customer': gen['customer'],
-            'risk_score': risk_score,
-            'avg_temp_24h': avg_temp_24h,
-            'suggested_parts': ', '.join(parts) if parts else 'none'
-        })
-    
-    risk_df = pd.DataFrame(risk_scores).sort_values('risk_score', ascending=False)
-    
-    # Display risk scores
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("**Top Risk Units:**")
-        for _, row in risk_df.head(5).iterrows():
-            risk_color = "🔴" if row['risk_score'] > 70 else "🟡" if row['risk_score'] > 40 else "🟢"
-            st.write(f"{risk_color} **{row['generator_id']}** - Risk: {row['risk_score']:.0f}/100")
-            st.caption(f"Suggested: {row['suggested_parts']}")
-    
-    with col2:
-        # Risk distribution chart
-        fig = px.histogram(risk_df, x='risk_score', nbins=10, title="Risk Score Distribution")
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Maintenance schedule
-    st.subheader("📅 Maintenance Schedule")
-    
-    if not maintenance_df.empty:
-        # Add priority scoring based on due date and risk
-        maintenance_display = maintenance_df.merge(risk_df[['generator_id', 'risk_score']], 
-                                                 on='generator_id', how='left')
-        
-        # Calculate priority score
-        maintenance_display['due_by_date'] = pd.to_datetime(maintenance_display['due_by_date'])
-        days_until_due = (maintenance_display['due_by_date'] - datetime.now()).dt.days
-        maintenance_display['priority_score'] = (100 - days_until_due) + maintenance_display['risk_score']
-        
-        maintenance_display = maintenance_display.sort_values('priority_score', ascending=False)
-        
-        # Engineer assignment
-        engineers = ["John Smith", "Sarah Johnson", "Mike Brown", "Lisa Chen"]
-        
-        for _, maint in maintenance_display.head(10).iterrows():
-            with st.container():
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.write(f"**{maint['generator_id']}**")
-                    st.write(f"Type: {maint['type']}")
-                    priority_color = "🔴" if maint['priority_score'] > 150 else "🟡" if maint['priority_score'] > 100 else "🟢"
-                    st.write(f"Priority: {priority_color} {maint['priority_score']:.0f}")
-                
-                with col2:
-                    st.write(f"Due: {maint['due_by_date'].strftime('%Y-%m-%d')}")
-                    st.write(f"Risk Score: {maint['risk_score']:.0f}")
-                
-                with col3:
-                    assigned = st.selectbox("Assign to:", 
-                                          [""] + engineers,
-                                          key=f"assign_{maint['id']}")
-                
-                with col4:
-                    status = st.selectbox("Status:",
-                                        ["PLANNED", "IN-PROGRESS", "DONE"],
-                                        key=f"status_{maint['id']}")
-                
-                st.markdown("---")
-    else:
-        st.info("No maintenance scheduled.")
-
 def show_service_portal():
     """Business/Service portal page."""
     if st.session_state.user_role != "service@demo":
@@ -1235,6 +987,8 @@ def show_service_portal():
         if not telemetry_df.empty:
             avg_temp = telemetry_df.groupby('generator_id')['temp_c'].tail(1).mean()
             st.metric("Fleet Avg Temp", f"{avg_temp:.1f}°C")
+        else:
+            st.metric("Fleet Avg Temp", "N/A")
     
     with col4:
         st.metric("Monthly Revenue", f"${total_revenue:,}")
@@ -1255,33 +1009,6 @@ def show_service_portal():
         fig = px.bar(x=list(revenue_by_tier.keys()), y=list(revenue_by_tier.values()),
                     title="Revenue by Tier")
         st.plotly_chart(fig, use_container_width=True)
-    
-    # Customer analytics
-    st.subheader("👥 Customer Analytics")
-    
-    customer_stats = generators_df.groupby('customer').agg({
-        'id': 'count',
-        'subscription_tier': lambda x: x.mode().iloc[0] if not x.empty else 'Basic'
-    }).reset_index()
-    customer_stats.columns = ['Customer', 'Generator Count', 'Primary Tier']
-    
-    # Merge with alerts
-    customer_alerts = alerts_df.merge(generators_df[['id', 'customer']], 
-                                    left_on='generator_id', right_on='id', how='left')
-    alert_counts = customer_alerts.groupby('customer')['id_x'].count().reset_index()
-    alert_counts.columns = ['Customer', 'Alert Count']
-    
-    customer_summary = customer_stats.merge(alert_counts, on='Customer', how='left').fillna(0)
-    
-    st.dataframe(customer_summary, use_container_width=True, hide_index=True)
-    
-    # NPS Proxy calculation
-    total_alerts = len(alerts_df)
-    acked_within_15min = 0  # Simplified for demo
-    nps_proxy = 5 if total_alerts == 0 else (acked_within_15min / total_alerts * 100)
-    
-    st.metric("NPS Proxy Score", f"+{nps_proxy:.0f}", 
-             help="Based on alert acknowledgment rate within 15 minutes")
 
 def show_admin_page():
     """Administration page (Service role only)."""
@@ -1294,55 +1021,6 @@ def show_admin_page():
     # Load data
     data = load_data_files()
     config = load_config()
-    
-    # Entity Management
-    st.subheader("🏭 Entity Management")
-    
-    tab1, tab2 = st.tabs(["Generators", "Customers"])
-    
-    with tab1:
-        generators_df = data['generators']
-        
-        # Add/Edit Generator
-        with st.expander("Add New Generator"):
-            with st.form("add_generator"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_id = st.text_input("Generator ID:")
-                    new_name = st.text_input("Name:")
-                    new_customer = st.selectbox("Customer:", data['customers']['name'].tolist())
-                    new_model = st.text_input("Model:")
-                with col2:
-                    new_protocol = st.selectbox("Protocol:", ["Modbus", "CAN", "RS485"])
-                    new_lat = st.number_input("Latitude:")
-                    new_lon = st.number_input("Longitude:")
-                    new_tier = st.selectbox("Subscription:", ["Basic", "Pro", "Premium"])
-                
-                if st.form_submit_button("Add Generator"):
-                    st.success(f"Generator {new_id} added!")
-        
-        # Display generators table
-        st.dataframe(generators_df, use_container_width=True, hide_index=True)
-    
-    with tab2:
-        customers_df = data['customers']
-        
-        # Add/Edit Customer
-        with st.expander("Add New Customer"):
-            with st.form("add_customer"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    new_cust_id = st.text_input("Customer ID:")
-                    new_cust_name = st.text_input("Name:")
-                with col2:
-                    new_email = st.text_input("Contact Email:")
-                    new_city = st.text_input("City:")
-                
-                if st.form_submit_button("Add Customer"):
-                    st.success(f"Customer {new_cust_name} added!")
-        
-        # Display customers table
-        st.dataframe(customers_df, use_container_width=True, hide_index=True)
     
     # Threshold Management
     st.subheader("⚠️ Alert Thresholds")
@@ -1413,24 +1091,14 @@ def show_admin_page():
     # System Configuration
     st.subheader("🔧 System Configuration")
     
-    col1, col2 = st.columns(2)
+    new_refresh = st.number_input("Auto-refresh interval (seconds):",
+                                value=config['refresh_seconds'],
+                                min_value=5, max_value=60)
     
-    with col1:
-        new_refresh = st.number_input("Auto-refresh interval (seconds):",
-                                    value=config['refresh_seconds'],
-                                    min_value=5, max_value=60)
-        
-        if st.button("Update Refresh Rate"):
-            config['refresh_seconds'] = new_refresh
-            save_config(config)
-            st.success("Refresh rate updated!")
-    
-    with col2:
-        # User management (demo)
-        st.write("**Demo User Roles:**")
-        st.write("• customer@demo - Customer Portal")
-        st.write("• service@demo - Business/Service Portal")
-        st.info("In a production system, this would show real user management.")
+    if st.button("Update Refresh Rate"):
+        config['refresh_seconds'] = new_refresh
+        save_config(config)
+        st.success("Refresh rate updated!")
 
 def main():
     """Main application function."""
@@ -1471,7 +1139,6 @@ def main():
             "⚡ Fleet Monitoring": show_fleet_monitoring,
             "🚨 Alerts": show_alerts_page,
             "🔧 Generator Detail": show_generator_detail,
-            "🛠️ Maintenance": show_maintenance_management,
             "🏢 Service Portal": show_service_portal,
             "⚙️ Admin": show_admin_page
         }
@@ -1483,4 +1150,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
