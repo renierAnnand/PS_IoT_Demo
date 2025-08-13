@@ -245,6 +245,129 @@ def _generate_enhanced_generator_data() -> Dict:
     }
 
 @st.cache_data(ttl=60)  # Update every minute for real-time feel
+def generate_interval_service_data(generators_df: pd.DataFrame) -> pd.DataFrame:
+    """Generate realistic interval-based service scheduling data."""
+    seed = int(time.time() // 60)
+    np.random.seed(seed)
+    
+    interval_data = []
+    
+    # Realistic service intervals and tasks
+    service_types = {
+        'minor': {
+            'interval': 400,  # Every 250-500 hours (using 400 as average)
+            'name': 'Minor Service',
+            'tasks': ['Oil change', 'Oil filter replacement', 'Fuel filter change', 'Air filter check/clean', 'Coolant check', 'Battery inspection', 'Belts inspection', 'General operational checks'],
+            'parts': ['Oil Filter', 'Oil (20L)', 'Fuel Filter'],
+            'cost': 450
+        },
+        'intermediate': {
+            'interval': 1000,  # Every 1,000 hours
+            'name': 'Intermediate Service',
+            'tasks': ['All minor service items', 'Cooling system inspection', 'Exhaust inspection', 'Electrical connections check', 'Alternator inspection', 'Turbocharger check', 'Load testing'],
+            'parts': ['Oil Filter', 'Oil (20L)', 'Fuel Filter', 'Air Filter', 'Coolant'],
+            'cost': 850
+        },
+        'major': {
+            'interval': 15000,  # Every 10,000-20,000 hours (using 15,000 as average)
+            'name': 'Major Service / Overhaul',
+            'tasks': ['Complete engine teardown', 'Engine rebuild', 'Bearings replacement', 'Piston rings replacement', 'Valves replacement', 'Alternator refurbishment', 'Radiator re-core', 'Full electrical inspection'],
+            'parts': ['Complete Engine Kit', 'Alternator Parts', 'Radiator Core', 'Electrical Components', 'Oil Filter', 'Oil (40L)', 'Coolant (20L)'],
+            'cost': 12500
+        }
+    }
+    
+    for _, gen in generators_df.iterrows():
+        try:
+            runtime_hours = gen.get('total_runtime_hours', random.randint(3000, 9000))
+            model = gen['model_series']
+            
+            # Determine which service is due next based on runtime
+            services_due = []
+            
+            for service_key, service_info in service_types.items():
+                interval = service_info['interval']
+                hours_since_service = runtime_hours % interval
+                hours_to_next_service = interval - hours_since_service
+                
+                # Calculate notification threshold (5% before interval)
+                notification_threshold = interval * 0.05
+                
+                # Add some variation - some might be overdue
+                if np.random.random() < 0.1:  # 10% chance of being overdue
+                    hours_to_next_service = -random.randint(10, 200)
+                
+                services_due.append({
+                    'service_type': service_key,
+                    'service_name': service_info['name'],
+                    'hours_to_next': hours_to_next_service,
+                    'notification_threshold': notification_threshold,
+                    'tasks': service_info['tasks'],
+                    'parts': service_info['parts'],
+                    'cost': service_info['cost'],
+                    'needs_contact': hours_to_next_service <= notification_threshold
+                })
+            
+            # Find the most urgent service (closest to due or overdue)
+            most_urgent = min(services_due, key=lambda x: x['hours_to_next'])
+            
+            # Only include if it needs contact or is overdue
+            if most_urgent['needs_contact'] or most_urgent['hours_to_next'] <= 0:
+                
+                # Determine status and priority
+                if most_urgent['hours_to_next'] < 0:
+                    service_status = "OVERDUE"
+                    priority = "CRITICAL" if most_urgent['service_type'] == 'major' else "HIGH"
+                    days_overdue = abs(most_urgent['hours_to_next']) // 24
+                    service_detail = f"{most_urgent['service_name']} overdue by {days_overdue} days"
+                elif most_urgent['hours_to_next'] <= most_urgent['notification_threshold']:
+                    service_status = "DUE SOON"
+                    priority = "HIGH" if most_urgent['service_type'] == 'major' else "MEDIUM"
+                    service_detail = f"{most_urgent['service_name']} due in {int(most_urgent['hours_to_next'])} hours"
+                else:
+                    service_status = "SCHEDULED"
+                    priority = "LOW"
+                    service_detail = f"Next {most_urgent['service_name']} in {int(most_urgent['hours_to_next'])} hours"
+                
+                # Adjust cost for overdue services
+                estimated_cost = most_urgent['cost']
+                if most_urgent['hours_to_next'] < 0:
+                    estimated_cost = int(estimated_cost * 1.2)  # 20% surcharge for delayed service
+                
+                # Critical applications (Healthcare) get higher priority
+                if 'Healthcare' in model:
+                    if priority == "MEDIUM":
+                        priority = "HIGH"
+                    elif priority == "LOW":
+                        priority = "MEDIUM"
+                
+                interval_data.append({
+                    'serial_number': gen['serial_number'],
+                    'customer_name': gen['customer_name'],
+                    'customer_contact': gen.get('customer_contact', 'contact@customer.sa'),
+                    'model_series': model,
+                    'service_type': most_urgent['service_type'],
+                    'service_name': most_urgent['service_name'],
+                    'service_interval': service_types[most_urgent['service_type']]['interval'],
+                    'runtime_hours': runtime_hours,
+                    'hours_to_next_service': int(most_urgent['hours_to_next']),
+                    'service_status': service_status,
+                    'priority': priority,
+                    'service_detail': service_detail,
+                    'tasks_required': '; '.join(most_urgent['tasks'][:3]) + ('...' if len(most_urgent['tasks']) > 3 else ''),
+                    'parts_needed': ", ".join(most_urgent['parts']),
+                    'estimated_cost': estimated_cost,
+                    'needs_contact': True,
+                    'contact_status': 'PENDING',
+                    'contact_notes': '',
+                    'last_contact_date': None,
+                    'service_booked': False
+                })
+                
+        except Exception as e:
+            continue
+    
+    return pd.DataFrame(interval_data)
 def generate_real_time_status(generators_df: pd.DataFrame) -> pd.DataFrame:
     """Generate real-time operational status and sensor data."""
     seed = int(time.time() // 60)  # Changes every minute
@@ -365,6 +488,7 @@ def show_work_management_dashboard():
         # Load data
         generators_df = load_base_generator_data()
         status_df = generate_real_time_status(generators_df)
+        interval_service_df = generate_interval_service_data(generators_df)
         
         if generators_df.empty or status_df.empty:
             st.error("No generator data available. Please check data initialization.")
@@ -386,6 +510,7 @@ def show_work_management_dashboard():
                 <h4>🎫 Active Tickets</h4>
                 <h2>{total_opportunities}</h2>
                 <p>Revenue opportunities</p>
+                <p style='font-size:12px;'>🚨 {fault_opportunities} faults | ⏰ {interval_opportunities} intervals</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -415,6 +540,7 @@ def show_work_management_dashboard():
                 <h4>💰 Revenue Potential</h4>
                 <h2>${potential_revenue:,.0f}</h2>
                 <p>From current tickets</p>
+                <p style='font-size:12px;'>🚨 ${fault_revenue:,.0f} | ⏰ ${interval_revenue:,.0f}</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -532,47 +658,380 @@ def show_work_management_dashboard():
         else:
             st.success("✅ No immediate proactive notifications required - All generators operating normally!")
         
+        # INTERVAL SERVICE MANAGEMENT SECTION
+        st.subheader("⏰ Interval Service Management")
+        st.markdown("### Professional Generator Maintenance Scheduling")
+        
+        # Service type explanation
+        st.markdown("""
+        **🔧 Service Types:**
+        - **Minor Service** (250-500 hrs): Oil change, filters, basic checks
+        - **Intermediate Service** (1,000 hrs): Comprehensive inspection, load testing  
+        - **Major Service** (10,000-20,000 hrs): Complete overhaul, engine rebuild
+        """)
+        
+        # Filter generators that need interval service contact
+        interval_contact_needed = interval_service_df[interval_service_df['needs_contact'] == True].copy()
+        
+        # Interval service metrics with service type breakdown
+        col1, col2, col3, col4 = st.columns(4)
+        
+        total_interval_services = len(interval_contact_needed)
+        
+        # Count by service type
+        minor_services = len(interval_service_df[interval_service_df['service_type'] == 'minor'])
+        intermediate_services = len(interval_service_df[interval_service_df['service_type'] == 'intermediate']) 
+        major_services = len(interval_service_df[interval_service_df['service_type'] == 'major'])
+        
+        total_interval_revenue = interval_service_df[interval_service_df['needs_contact'] == True]['estimated_cost'].sum()
+        
+        with col1:
+            st.markdown(f"""
+            <div class="service-due-card">
+                <h4>📞 Total Services Due</h4>
+                <h2>{total_interval_services}</h2>
+                <p>Require customer contact</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="revenue-opportunity">
+                <h4>🔧 Service Breakdown</h4>
+                <h2>{minor_services + intermediate_services + major_services}</h2>
+                <p style='font-size:12px;'>🟢 {minor_services} Minor | 🟡 {intermediate_services} Inter | 🔴 {major_services} Major</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            critical_services = len(interval_service_df[interval_service_df['priority'] == 'CRITICAL'])
+            high_services = len(interval_service_df[interval_service_df['priority'] == 'HIGH'])
+            
+            st.markdown(f"""
+            <div class="ticket-card">
+                <h4>⚠️ High Priority</h4>
+                <h2>{critical_services + high_services}</h2>
+                <p style='font-size:12px;'>🔴 {critical_services} Critical | 🟠 {high_services} High</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col4:
+            st.markdown(f"""
+            <div class="revenue-opportunity">
+                <h4>💰 Service Revenue</h4>
+                <h2>${total_interval_revenue:,.0f}</h2>
+                <p>From scheduled services</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        if not interval_contact_needed.empty:
+            st.markdown("""
+            <div style="background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%); padding: 1rem; border-radius: 8px; color: white; margin: 1rem 0;">
+                <h4>📞 Interval Service Contact List</h4>
+                <p>Generators approaching service intervals - Contact customers to schedule maintenance</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Create enhanced interval service table with professional service details
+            interval_display_data = []
+            for idx, service in interval_contact_needed.iterrows():
+                
+                # Service type icon
+                service_icon = {
+                    'minor': '🟢',
+                    'intermediate': '🟡', 
+                    'major': '🔴'
+                }.get(service['service_type'], '⚪')
+                
+                interval_display_data.append({
+                    'Service ID': f"SV-{service['serial_number'][-4:]}",
+                    'Generator': service['serial_number'],
+                    'Customer': service['customer_name'][:20] + "...",
+                    'Contact': service['customer_contact'],
+                    'Service Type': f"{service_icon} {service['service_name']}",
+                    'Runtime': f"{service['runtime_hours']:,} hrs",
+                    'Interval': f"{service['service_interval']} hrs",
+                    'Status': service['service_status'],
+                    'Priority': service['priority'],
+                    'Service Detail': service['service_detail'],
+                    'Tasks Required': service['tasks_required'],
+                    'Parts Needed': service['parts_needed'][:50] + "..." if len(service['parts_needed']) > 50 else service['parts_needed'],
+                    'Est. Cost': f"${service['estimated_cost']:,.0f}"
+                })
+            
+            interval_df_display = pd.DataFrame(interval_display_data)
+            st.dataframe(interval_df_display, use_container_width=True, hide_index=True)
+            
+            # Customer contact management section
+            st.subheader("📞 Customer Contact Management")
+            
+            # Contact action interface
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                selected_service = st.selectbox(
+                    "Select service to update:",
+                    options=[f"{row['Service ID']} - {row['Generator']} - {row['Customer']}" for row in interval_display_data],
+                    key="interval_service_select"
+                )
+                
+                contact_action = st.radio(
+                    "Contact Action:",
+                    ["📞 Called Customer", "📧 Sent Email", "📅 Service Booked", "❌ Close (No Service)"],
+                    key="contact_action"
+                )
+                
+                contact_notes = st.text_area(
+                    "Contact Notes:",
+                    placeholder="Enter details about customer contact, service agreement, or reason for closure...",
+                    key="contact_notes"
+                )
+            
+            with col2:
+                st.write("**Action Buttons:**")
+                
+                if st.button("💾 Update Contact Status", use_container_width=True, type="primary"):
+                    if contact_notes.strip():
+                        if "Service Booked" in contact_action:
+                            st.success(f"✅ Service booked for {selected_service.split(' - ')[1]}!")
+                            st.info("📋 Work order automatically created")
+                            st.info("📧 Confirmation email sent to customer")
+                        elif "Close" in contact_action:
+                            st.warning(f"❌ Service closed for {selected_service.split(' - ')[1]}")
+                            st.info("📝 Notes saved for future reference")
+                        else:
+                            st.success(f"📞 Contact status updated for {selected_service.split(' - ')[1]}")
+                            st.info("⏰ Follow-up reminder set for 24 hours")
+                    else:
+                        st.error("Please enter contact notes before updating")
+                
+                if st.button("📋 Create Work Order", use_container_width=True):
+                    st.success("📋 Work order created!")
+                    st.info("👷 Technician will be assigned automatically")
+                
+                if st.button("📧 Send Service Quote", use_container_width=True):
+                    st.success("📧 Service quote sent to customer!")
+                    st.info("💰 Includes parts and labor estimates")
+                
+                if st.button("📞 Add to Call Queue", use_container_width=True):
+                    st.success("📞 Added to priority call queue!")
+                    st.info("🔔 Sales team will be notified")
+            
+            # Quick bulk actions
+            st.subheader("⚡ Bulk Actions")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                if st.button("📧 Email All Customers", use_container_width=True):
+                    st.success(f"📧 Service reminder emails sent to {len(interval_contact_needed)} customers!")
+                    st.info("📋 Automated service quotes included")
+            
+            with col2:
+                if st.button("📞 Generate Call List", use_container_width=True):
+                    st.success("📞 Priority call list generated!")
+                    st.download_button(
+                        "📄 Download Call List",
+                        data=interval_df_display.to_csv(index=False),
+                        file_name=f"interval_services_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+            
+            with col3:
+                if st.button("📋 Create All Work Orders", use_container_width=True):
+                    st.success(f"📋 {len(interval_contact_needed)} work orders created!")
+                    st.info(f"💰 Total revenue potential: ${total_interval_revenue:,.0f}")
+            
+            with col4:
+                if st.button("📊 Export Report", use_container_width=True):
+                    st.success("📊 Interval service report generated!")
+                    st.download_button(
+                        "📄 Download Report",
+                        data=interval_df_display.to_csv(index=False),
+                        file_name=f"interval_service_report_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv"
+                    )
+        
+        else:
+            st.success("✅ No interval services requiring immediate contact - All generators on schedule!")
+            
+            # Show next upcoming services
+            upcoming_services = interval_service_df[
+                (interval_service_df['hours_to_next_service'] > 0) & 
+                (interval_service_df['hours_to_next_service'] <= 200)
+            ].sort_values('hours_to_next_service').head(5)
+            
+            if not upcoming_services.empty:
+                st.info("📅 **Upcoming Services (Next 200 hours):**")
+                upcoming_display = upcoming_services[['serial_number', 'customer_name', 'service_name', 'hours_to_next_service', 'estimated_cost']].copy()
+                upcoming_display.columns = ['Generator', 'Customer', 'Service Type', 'Hours Until Service', 'Est. Cost']
+                st.dataframe(upcoming_display, use_container_width=True, hide_index=True)
+        
+        # Service Portfolio Analysis
+        st.subheader("📊 Service Portfolio Analysis")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.write("**🔧 Service Type Revenue Breakdown:**")
+            
+            # Calculate revenue by service type
+            service_revenue = []
+            for service_type in ['minor', 'intermediate', 'major']:
+                type_services = interval_service_df[interval_service_df['service_type'] == service_type]
+                if not type_services.empty:
+                    count = len(type_services)
+                    revenue = type_services['estimated_cost'].sum()
+                    avg_cost = revenue / count if count > 0 else 0
+                    
+                    service_names = {
+                        'minor': '🟢 Minor Service',
+                        'intermediate': '🟡 Intermediate Service',
+                        'major': '🔴 Major Service'
+                    }
+                    
+                    service_revenue.append({
+                        'Service Type': service_names[service_type],
+                        'Count': count,
+                        'Total Revenue': f"${revenue:,.0f}",
+                        'Avg Cost': f"${avg_cost:,.0f}"
+                    })
+            
+            if service_revenue:
+                revenue_df = pd.DataFrame(service_revenue)
+                st.dataframe(revenue_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No service data available")
+        
+        with col2:
+            st.write("**⏰ Service Urgency Distribution:**")
+            
+            urgency_data = []
+            for status in ['OVERDUE', 'DUE SOON', 'SCHEDULED']:
+                status_services = interval_service_df[interval_service_df['service_status'] == status]
+                if not status_services.empty:
+                    count = len(status_services)
+                    revenue = status_services['estimated_cost'].sum()
+                    
+                    status_icons = {
+                        'OVERDUE': '🔴',
+                        'DUE SOON': '🟡',
+                        'SCHEDULED': '🟢'
+                    }
+                    
+                    urgency_data.append({
+                        'Status': f"{status_icons.get(status, '⚪')} {status}",
+                        'Count': count,
+                        'Revenue': f"${revenue:,.0f}"
+                    })
+            
+            if urgency_data:
+                urgency_df = pd.DataFrame(urgency_data)
+                st.dataframe(urgency_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No urgency data available")
+        
+        with col3:
+            st.write("**🏥 Critical Applications Priority:**")
+            
+            # Healthcare and critical applications get special attention
+            critical_apps = interval_service_df[interval_service_df['model_series'].str.contains('Healthcare|Industrial', na=False)]
+            
+            if not critical_apps.empty:
+                critical_summary = []
+                healthcare_count = len(critical_apps[critical_apps['model_series'].str.contains('Healthcare', na=False)])
+                industrial_count = len(critical_apps[critical_apps['model_series'].str.contains('Industrial', na=False)])
+                
+                if healthcare_count > 0:
+                    critical_summary.append({
+                        'Application': '🏥 Healthcare',
+                        'Count': healthcare_count,
+                        'Avg Interval': '600 hrs'
+                    })
+                
+                if industrial_count > 0:
+                    critical_summary.append({
+                        'Application': '🏭 Industrial',
+                        'Count': industrial_count,
+                        'Avg Interval': '800 hrs'
+                    })
+                
+                if critical_summary:
+                    critical_df = pd.DataFrame(critical_summary)
+                    st.dataframe(critical_df, use_container_width=True, hide_index=True)
+                    st.info("⚠️ Critical applications receive priority scheduling")
+            else:
+                st.info("No critical applications requiring service")
+        
         # Service Schedule Overview
-        st.subheader("📅 Service Schedule Overview")
+        st.subheader("📅 Professional Service Schedule Overview")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write("**🔧 Service Categories:**")
+            st.write("**🔧 Service Categories & Costs:**")
             
-            # Service breakdown
-            service_breakdown = []
-            overdue_count = len(status_df[status_df['next_service_hours'] < 0])
-            urgent_count = len(status_df[(status_df['next_service_hours'] >= 0) & (status_df['next_service_hours'] < 48)])
-            due_soon_count = len(status_df[(status_df['next_service_hours'] >= 48) & (status_df['next_service_hours'] < 168)])
-            scheduled_count = len(status_df[status_df['next_service_hours'] >= 168])
-            
+            # Professional service breakdown with realistic costs
             service_breakdown = [
-                {"Category": "🔴 Overdue Service", "Count": overdue_count, "Revenue": f"${overdue_count * 1020:,.0f}"},
-                {"Category": "🟠 Urgent (< 48hrs)", "Count": urgent_count, "Revenue": f"${urgent_count * 850:,.0f}"},
-                {"Category": "🟡 Due Soon (1 week)", "Count": due_soon_count, "Revenue": f"${due_soon_count * 850:,.0f}"},
-                {"Category": "🟢 Scheduled", "Count": scheduled_count, "Revenue": f"${scheduled_count * 720:,.0f}"}
+                {
+                    "Service Type": "🟢 Minor Service",
+                    "Interval": "250-500 hrs",
+                    "Typical Tasks": "Oil change, filters, basic inspection",
+                    "Avg Cost": "$450",
+                    "Duration": "2-3 hrs"
+                },
+                {
+                    "Service Type": "🟡 Intermediate Service", 
+                    "Interval": "1,000 hrs",
+                    "Typical Tasks": "Comprehensive inspection, load testing",
+                    "Avg Cost": "$850",
+                    "Duration": "4-6 hrs"
+                },
+                {
+                    "Service Type": "🔴 Major Service",
+                    "Interval": "10,000-20,000 hrs", 
+                    "Typical Tasks": "Complete overhaul, engine rebuild",
+                    "Avg Cost": "$12,500",
+                    "Duration": "3-5 days"
+                }
             ]
             
             service_df = pd.DataFrame(service_breakdown)
             st.dataframe(service_df, use_container_width=True, hide_index=True)
         
         with col2:
-            st.write("**🛠️ Service Type Distribution:**")
+            st.write("**💰 Revenue Opportunity Analysis:**")
             
-            # Create service type breakdown
-            high_runtime = len(status_df[status_df.get('runtime_hours', 5000) > 8000])
-            medium_runtime = len(status_df[(status_df.get('runtime_hours', 5000) >= 5000) & (status_df.get('runtime_hours', 5000) <= 8000)])
-            low_runtime = len(status_df[status_df.get('runtime_hours', 5000) < 5000])
-            
-            service_types = [
-                {"Service Type": "🔧 Major Service", "Units": high_runtime, "Est. Cost": "$1,200/unit"},
-                {"Service Type": "⚙️ Standard Service", "Units": medium_runtime, "Est. Cost": "$850/unit"},
-                {"Service Type": "🧹 Basic Service", "Units": low_runtime, "Est. Cost": "$450/unit"}
-            ]
-            
-            service_types_df = pd.DataFrame(service_types)
-            st.dataframe(service_types_df, use_container_width=True, hide_index=True)
+            # Calculate actual revenue potential from current data
+            if not interval_service_df.empty:
+                revenue_analysis = []
+                
+                for service_type in ['minor', 'intermediate', 'major']:
+                    type_data = interval_service_df[interval_service_df['service_type'] == service_type]
+                    if not type_data.empty:
+                        due_count = len(type_data[type_data['needs_contact'] == True])
+                        total_revenue = type_data[type_data['needs_contact'] == True]['estimated_cost'].sum()
+                        
+                        service_names = {
+                            'minor': '🟢 Minor',
+                            'intermediate': '🟡 Intermediate', 
+                            'major': '🔴 Major'
+                        }
+                        
+                        revenue_analysis.append({
+                            "Type": service_names[service_type],
+                            "Due Now": due_count,
+                            "Revenue": f"${total_revenue:,.0f}",
+                            "Avg Value": f"${total_revenue/due_count:,.0f}" if due_count > 0 else "$0"
+                        })
+                
+                if revenue_analysis:
+                    revenue_df = pd.DataFrame(revenue_analysis)
+                    st.dataframe(revenue_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No current revenue opportunities")
+            else:
+                st.info("No service data available")
         
         # Fleet status overview
         st.subheader("🗺️ Fleet Status Overview")
@@ -645,6 +1104,20 @@ def show_work_management_dashboard():
             
             if st.button("📋 Generate Purchase Order", use_container_width=True):
                 st.success("PO generated for low-stock items!")
+        
+        # Weekly Service Metrics
+        st.subheader("📊 Weekly Service Performance Metrics")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("This Week's Revenue", "$12,750", delta="+15% vs last week")
+        with col2:
+            st.metric("Tickets Closed", "23", delta="+8 this week")
+        with col3:
+            st.metric("Avg Response Time", "2.3 hrs", delta="-0.5 hrs improved")
+        with col4:
+            st.metric("Customer Satisfaction", "94%", delta="+2% this month")
     
     except Exception as e:
         st.error(f"Error loading work management dashboard: {str(e)}")
@@ -934,6 +1407,7 @@ def main():
     st.sidebar.markdown("### ⚡ Platform Features")
     st.sidebar.markdown("✅ Proactive Service Notifications")
     st.sidebar.markdown("✅ Advanced Ticketing System")
+    st.sidebar.markdown("🆕 **Interval Service Management**")
     st.sidebar.markdown("✅ Real-time Generator Status")
     st.sidebar.markdown("✅ Live Sensor Monitoring")
     st.sidebar.markdown("✅ Revenue Optimization")
