@@ -1,6 +1,7 @@
 """
-Optimized Power System Manufacturer IoT Platform
-Performance-optimized version with caching, lazy loading, and streamlined data processing
+Power System Manufacturer IoT Platform
+Work Management & Proactive Maintenance Platform
+Focus: Ticketing system, proactive customer contact, enhanced customer portal
 """
 
 import streamlit as st
@@ -20,27 +21,64 @@ import functools
 
 # Page configuration
 st.set_page_config(
-    page_title="Power System Platform",
+    page_title="Power System Work Management",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Optimized CSS - Reduced complexity
+# Enhanced CSS for work management focus
 st.markdown("""
 <style>
-    .metric-card {
-        background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+    .ticket-card {
+        background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
         padding: 1rem;
         border-radius: 8px;
         color: white;
         margin: 0.3rem 0;
+        border-left: 5px solid #b71c1c;
     }
-    .alert-card {
+    .service-due-card {
         background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
-        padding: 0.8rem;
+        padding: 1rem;
         border-radius: 8px;
         color: white;
+        border-left: 5px solid #e65100;
+    }
+    .revenue-opportunity {
+        background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+        padding: 1rem;
+        border-radius: 8px;
+        color: white;
+        border-left: 5px solid #1b5e20;
+    }
+    .generator-running {
+        background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+        padding: 0.8rem;
+        border-radius: 6px;
+        color: white;
+        margin: 0.2rem 0;
+    }
+    .generator-fault {
+        background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
+        padding: 0.8rem;
+        border-radius: 6px;
+        color: white;
+        margin: 0.2rem 0;
+    }
+    .generator-standby {
+        background: linear-gradient(135deg, #757575 0%, #9e9e9e 100%);
+        padding: 0.8rem;
+        border-radius: 6px;
+        color: white;
+        margin: 0.2rem 0;
+    }
+    .generator-maintenance {
+        background: linear-gradient(135deg, #f57c00 0%, #ff9800 100%);
+        padding: 0.8rem;
+        border-radius: 6px;
+        color: white;
+        margin: 0.2rem 0;
     }
     .header-card {
         background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
@@ -50,45 +88,56 @@ st.markdown("""
         text-align: center;
         margin-bottom: 1.5rem;
     }
+    .proactive-alert {
+        background: linear-gradient(135deg, #7b1fa2 0%, #9c27b0 100%);
+        padding: 1rem;
+        border-radius: 8px;
+        color: white;
+        border: 2px solid #4a148c;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { border-color: #4a148c; }
+        50% { border-color: #9c27b0; }
+        100% { border-color: #4a148c; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Configuration
 CONFIG = {
     "company_name": "Power System Manufacturing",
-    "refresh_interval": 30,  # Increased from 5 to reduce updates
-    "cache_ttl": 300,  # 5 minute cache
+    "refresh_interval": 30,
+    "cache_ttl": 300,
+    "proactive_notification_hours": 72,  # Hours in advance to notify
     "revenue_targets": {
-        "parts_annual": 2500000,
-        "service_contracts": 1800000,
-        "upsell_conversion": 0.25
+        "service_revenue_per_ticket": 850,
+        "parts_revenue_per_ticket": 450
     }
 }
 
-# Data directory
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
 
 # ========================================
-# PERFORMANCE OPTIMIZATION FUNCTIONS
+# DATA MODELS AND GENERATION
 # ========================================
 
 @st.cache_data(ttl=CONFIG["cache_ttl"])
 def load_base_generator_data() -> pd.DataFrame:
-    """Cached function to load base generator data."""
+    """Load base generator data with enhanced status tracking."""
     generators_file = DATA_DIR / "generators.csv"
     
     if not generators_file.exists():
-        # Generate seed data once and cache it
-        generators_data = _generate_seed_data()
+        generators_data = _generate_enhanced_generator_data()
         df = pd.DataFrame(generators_data)
         df.to_csv(generators_file, index=False)
         return df
     
     return pd.read_csv(generators_file)
 
-def _generate_seed_data() -> Dict:
-    """Generate seed data for generators - called only once."""
+def _generate_enhanced_generator_data() -> Dict:
+    """Generate enhanced generator data with operational status."""
     return {
         'serial_number': [f'PS-{2020 + i//4}-{i:04d}' for i in range(1, 31)],
         'model_series': ([
@@ -105,17 +154,21 @@ def _generate_seed_data() -> Dict:
             'Al-Ula Heritage', 'Qiddiya Venue', 'SPARK Sports', 'Mukaab Tower',
             'Diriyah Gate', 'King Salman Park'
         ],
+        'customer_contact': [
+            'ahmed.alrashid@kfmc.sa', 'ops@riyadhmall.com', 'maint@sabic.com', 'facility@aramco.com',
+            'tech@alrajhi.com', 'ops@stc.sa', 'eng@neom.sa', 'maint@redsea.sa',
+            'tech@saudiairlines.com', 'facility@kaust.edu.sa', 'ops@pif.gov.sa', 'tech@vision2030.sa',
+            'maint@ministry.gov.sa', 'eng@royalhospital.sa', 'ops@diplomatic.sa', 'tech@financial.sa',
+            'facility@entertainment.sa', 'ops@sportsboulevard.sa', 'eng@greenriyadh.sa', 'tech@roshn.sa',
+            'ops@enowa.sa', 'eng@theline.sa', 'facility@oxagon.sa', 'tech@trojena.sa',
+            'ops@alula.sa', 'facility@qiddiya.sa', 'tech@spark.sa', 'eng@mukaab.sa',
+            'ops@diriyah.sa', 'facility@kingsalmanpark.sa'
+        ],
         'rated_kw': [
             2000, 1500, 1000, 800, 2500, 2000, 1800, 1200,
             1000, 750, 600, 400, 2200, 1800, 1400, 900,
             650, 500, 350, 300, 2800, 2200, 1600, 1100,
             850, 700, 450, 380, 320, 280
-        ],
-        'warranty_status': [
-            'Active', 'Active', 'Expired', 'Active', 'Active', 'Expired', 'Active', 'Active',
-            'Expired', 'Active', 'Active', 'Expired', 'Active', 'Active', 'Expired', 'Active',
-            'Active', 'Expired', 'Active', 'Active', 'Active', 'Active', 'Expired', 'Active',
-            'Active', 'Active', 'Expired', 'Active', 'Expired', 'Active'
         ],
         'service_contract': [
             'Premium Care', 'Basic Maintenance', 'Preventive Plus', 'No Contract',
@@ -127,125 +180,94 @@ def _generate_seed_data() -> Dict:
             'Basic Maintenance', 'Premium Care', 'No Contract', 'Basic Maintenance',
             'No Contract', 'Preventive Plus'
         ],
-        'customer_tier': [
-            'Enterprise', 'Commercial', 'Enterprise', 'Enterprise',
-            'Enterprise', 'Enterprise', 'Enterprise', 'Commercial',
-            'Commercial', 'Enterprise', 'Enterprise', 'Commercial',
-            'Enterprise', 'Enterprise', 'Small Business', 'Commercial',
-            'Enterprise', 'Small Business', 'Enterprise', 'Commercial',
-            'Enterprise', 'Enterprise', 'Small Business', 'Commercial',
-            'Commercial', 'Enterprise', 'Small Business', 'Commercial',
-            'Small Business', 'Commercial'
-        ],
-        'next_service_hours': [random.randint(-100, 800) for _ in range(30)],
+        'next_service_hours': [random.randint(-200, 800) for _ in range(30)],
         'total_runtime_hours': [random.randint(2000, 12000) for _ in range(30)],
         'location_city': [
             'Riyadh', 'Riyadh', 'Dammam', 'Riyadh', 'Riyadh', 'Jeddah', 'NEOM', 'Al-Ula',
             'Riyadh', 'Thuwal', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh',
             'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'NEOM', 'NEOM', 'NEOM', 'Qiddiya',
             'Al-Ula', 'Qiddiya', 'Riyadh', 'Riyadh', 'Diriyah', 'Riyadh'
+        ],
+        'installation_date': [
+            datetime.now() - timedelta(days=random.randint(365, 1825)) for _ in range(30)
         ]
     }
 
-@st.cache_data(ttl=CONFIG["cache_ttl"])
-def calculate_revenue_metrics() -> Dict:
-    """Cached revenue calculations."""
-    # Simulate revenue calculations
-    base_parts = 1850000
-    base_service = 1420000
-    
-    # Add some variance but keep it cached
-    seed = int(time.time() // CONFIG["cache_ttl"])  # Changes every 5 minutes
+@st.cache_data(ttl=60)  # Update every minute for real-time feel
+def generate_real_time_status(generators_df: pd.DataFrame) -> pd.DataFrame:
+    """Generate real-time operational status and sensor data."""
+    seed = int(time.time() // 60)  # Changes every minute
     np.random.seed(seed)
     
-    parts_variance = np.random.uniform(-0.05, 0.05)
-    service_variance = np.random.uniform(-0.05, 0.05)
-    
-    return {
-        'parts_revenue_ytd': int(base_parts * (1 + parts_variance)),
-        'service_revenue_ytd': int(base_service * (1 + service_variance)),
-        'parts_margin': 42.3,
-        'service_margin': 48.7
-    }
-
-@st.cache_data(ttl=600)  # Cache for 10 minutes
-def get_city_coordinates() -> Dict[str, Tuple[float, float]]:
-    """Cached city coordinates."""
-    return {
-        'Riyadh': (24.7136, 46.6753),
-        'Jeddah': (21.4858, 39.1925),
-        'Dammam': (26.4207, 50.0888),
-        'NEOM': (28.2654, 35.3254),
-        'Al-Ula': (26.6084, 37.9218),
-        'Qiddiya': (24.6500, 46.1667)
-    }
-
-@st.cache_data(ttl=CONFIG["cache_ttl"])
-def generate_sensor_data(generators_df: pd.DataFrame) -> pd.DataFrame:
-    """Generate optimized sensor data with caching."""
-    cities = get_city_coordinates()
-    
-    # Use deterministic seed based on time for consistent but changing data
-    seed = int(time.time() // CONFIG["cache_ttl"])
-    np.random.seed(seed)
-    
-    map_data = []
+    status_data = []
     for _, gen in generators_df.iterrows():
-        city = gen['location_city']
-        base_lat, base_lon = cities.get(city, cities['Riyadh'])
+        # Operational status logic
+        oil_pressure = np.random.uniform(20, 35)
+        coolant_temp = np.random.uniform(75, 110)
+        vibration = np.random.uniform(1.0, 6.0)
+        fuel_level = np.random.uniform(10, 95)
+        load_percent = np.random.uniform(0, 100)
         
-        # Optimized data generation
-        lat = base_lat + np.random.uniform(-0.1, 0.1)
-        lon = base_lon + np.random.uniform(-0.1, 0.1)
+        # Determine operational status
+        has_fault = (oil_pressure < 25 or coolant_temp > 105 or vibration > 5.0 or fuel_level < 15)
+        is_needed = np.random.choice([True, False], p=[0.7, 0.3])  # 70% chance generator is needed
         
-        # Vectorized sensor simulation
-        oil_pressure = np.random.uniform(25, 35)
-        coolant_temp = np.random.uniform(80, 100)
-        vibration = np.random.uniform(1.5, 5.0)
-        fuel_level = np.random.uniform(15, 90)
-        
-        # Simplified health calculation
-        health_score = 100
-        if oil_pressure < 28: health_score -= 15
-        if coolant_temp > 95: health_score -= 25
-        if vibration > 4.0: health_score -= 30
-        health_score = max(20, health_score)
-        
-        # Optimized status determination
-        if oil_pressure < 25 or coolant_temp > 100:
-            color, status = [255, 0, 0, 180], "CRITICAL"
-        elif oil_pressure < 28 or coolant_temp > 95 or vibration > 4.0:
-            color, status = [255, 165, 0, 180], "WARNING"
-        elif health_score > 85:
-            color, status = [0, 255, 0, 160], "HEALTHY"
+        if has_fault:
+            operational_status = "FAULT"
+            status_color = "fault"
+            fault_description = []
+            if oil_pressure < 25: fault_description.append("Low oil pressure")
+            if coolant_temp > 105: fault_description.append("High coolant temperature")
+            if vibration > 5.0: fault_description.append("High vibration")
+            if fuel_level < 15: fault_description.append("Low fuel")
+            fault_desc = ", ".join(fault_description)
+        elif is_needed and fuel_level > 20:
+            operational_status = "RUNNING"
+            status_color = "running"
+            fault_desc = ""
+        elif not is_needed:
+            operational_status = "STANDBY"
+            status_color = "standby"
+            fault_desc = "Not required - standby mode"
         else:
-            color, status = [255, 255, 0, 160], "MONITOR"
+            operational_status = "MAINTENANCE"
+            status_color = "maintenance"
+            fault_desc = "Scheduled maintenance"
         
-        map_data.append({
-            'lat': lat, 'lon': lon,
-            'generator_id': gen['serial_number'],
-            'customer': gen['customer_name'][:30],
-            'health_score': round(health_score, 1),
-            'status': status, 'color': color,
-            'size': gen['rated_kw'] / 80,
+        # Calculate next service notification
+        service_hours = gen['next_service_hours']
+        needs_proactive_contact = service_hours < CONFIG["proactive_notification_hours"] and service_hours > 0
+        
+        status_data.append({
+            'serial_number': gen['serial_number'],
+            'customer_name': gen['customer_name'],
+            'customer_contact': gen['customer_contact'],
+            'operational_status': operational_status,
+            'status_color': status_color,
+            'fault_description': fault_desc,
             'oil_pressure': round(oil_pressure, 1),
             'coolant_temp': round(coolant_temp, 1),
             'vibration': round(vibration, 2),
-            'fuel_level': round(fuel_level, 1)
+            'fuel_level': round(fuel_level, 1),
+            'load_percent': round(load_percent, 1),
+            'next_service_hours': service_hours,
+            'needs_proactive_contact': needs_proactive_contact,
+            'revenue_opportunity': has_fault or needs_proactive_contact
         })
     
-    return pd.DataFrame(map_data)
+    return pd.DataFrame(status_data)
 
 # ========================================
-# STREAMLINED AUTHENTICATION
+# AUTHENTICATION
 # ========================================
 
-def authenticate_manufacturer():
-    """Optimized authentication with minimal UI."""
+def authenticate_system():
+    """Authentication for work management system."""
     st.markdown("""
     <div class="header-card">
-        <h1>⚡ Power System Manufacturing</h1>
-        <h3>After-Sales Revenue Optimization Platform</h3>
+        <h1>⚡ Power System Work Management</h1>
+        <h2>Proactive Maintenance & Customer Management Platform</h2>
+        <p>Advanced ticketing • Proactive notifications • Customer portal</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -253,244 +275,398 @@ def authenticate_manufacturer():
     
     with col2:
         user_roles = {
-            "ceo@powersystem": "👔 CEO Dashboard",
-            "sales@powersystem": "💰 Sales Manager",
-            "service@powersystem": "🔧 Service Operations",
-            "customer@powersystem": "🏢 Customer Portal"
+            "operations@powersystem": "🔧 Operations Manager - Work Orders & Tickets",
+            "service@powersystem": "⚡ Service Team - Field Operations",
+            "sales@powersystem": "💰 Sales Team - Revenue Opportunities",
+            "customer@powersystem": "🏢 Customer Portal - Generator Status"
         }
         
         selected_role = st.selectbox(
-            "Choose your role:",
+            "Select your access level:",
             options=list(user_roles.keys()),
             format_func=lambda x: user_roles[x]
         )
         
-        if st.button("🚀 Access Platform", type="primary", use_container_width=True):
+        if st.button("🚀 Access Work Management System", type="primary", use_container_width=True):
             st.session_state.authenticated = True
             st.session_state.user_role = selected_role
             st.session_state.role_name = user_roles[selected_role]
             st.rerun()
 
 # ========================================
-# OPTIMIZED DASHBOARD FUNCTIONS
+# WORK MANAGEMENT DASHBOARD
 # ========================================
 
-def show_optimized_ceo_dashboard():
-    """Optimized CEO dashboard with cached data."""
-    st.title("👔 CEO Revenue Dashboard")
+def show_work_management_dashboard():
+    """Advanced work management and ticketing system."""
+    st.title("🎫 Work Management & Ticketing System")
+    st.markdown("### Proactive Service Scheduling & Revenue Optimization")
     
-    # Load cached data
+    # Load data
     generators_df = load_base_generator_data()
-    revenue_metrics = calculate_revenue_metrics()
+    status_df = generate_real_time_status(generators_df)
     
-    # Revenue KPIs
-    st.subheader("💰 Revenue Performance")
-    
+    # Key metrics
     col1, col2, col3, col4, col5 = st.columns(5)
     
-    parts_revenue = revenue_metrics['parts_revenue_ytd']
-    service_revenue = revenue_metrics['service_revenue_ytd']
-    total_revenue = parts_revenue + service_revenue
-    
-    targets = CONFIG['revenue_targets']
-    total_target = targets['parts_annual'] + targets['service_contracts']
+    # Calculate metrics
+    total_opportunities = len(status_df[status_df['revenue_opportunity'] == True])
+    fault_count = len(status_df[status_df['operational_status'] == 'FAULT'])
+    service_due = len(status_df[status_df['needs_proactive_contact'] == True])
+    potential_revenue = total_opportunities * CONFIG['revenue_targets']['service_revenue_per_ticket']
     
     with col1:
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>Total Revenue</h4>
-            <h2>${total_revenue:,.0f}</h2>
-            <p>{(total_revenue/total_target*100):.1f}% of target</p>
+        <div class="ticket-card">
+            <h4>🎫 Active Tickets</h4>
+            <h2>{total_opportunities}</h2>
+            <p>Revenue opportunities</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>Parts Revenue</h4>
-            <h2>${parts_revenue:,.0f}</h2>
-            <p>{(parts_revenue/targets['parts_annual']*100):.1f}% achieved</p>
+        <div class="service-due-card">
+            <h4>⏰ Service Due</h4>
+            <h2>{service_due}</h2>
+            <p>Proactive notifications</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>Service Revenue</h4>
-            <h2>${service_revenue:,.0f}</h2>
-            <p>{(service_revenue/targets['service_contracts']*100):.1f}% achieved</p>
+        <div class="ticket-card">
+            <h4>🚨 Fault Alerts</h4>
+            <h2>{fault_count}</h2>
+            <p>Immediate response needed</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>Parts Margin</h4>
-            <h2>{revenue_metrics['parts_margin']:.1f}%</h2>
-            <p>Target: 40%</p>
+        <div class="revenue-opportunity">
+            <h4>💰 Revenue Potential</h4>
+            <h2>${potential_revenue:,.0f}</h2>
+            <p>From current tickets</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col5:
+        running_count = len(status_df[status_df['operational_status'] == 'RUNNING'])
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>Service Margin</h4>
-            <h2>{revenue_metrics['service_margin']:.1f}%</h2>
-            <p>Target: 45%</p>
+        <div class="revenue-opportunity">
+            <h4>⚡ Generators Running</h4>
+            <h2>{running_count}</h2>
+            <p>Of {len(status_df)} total</p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Optimized fleet overview
-    st.subheader("🏭 Fleet Overview")
+    # Proactive notifications section
+    st.subheader("🔔 Proactive Customer Notifications")
+    
+    proactive_opportunities = status_df[
+        (status_df['needs_proactive_contact'] == True) | 
+        (status_df['operational_status'] == 'FAULT')
+    ].copy()
+    
+    if not proactive_opportunities.empty:
+        st.markdown("""
+        <div class="proactive-alert">
+            <h4>🚨 Immediate Action Required</h4>
+            <p>The following customers should be contacted proactively to arrange service and maximize revenue:</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Create ticket data
+        tickets = []
+        for _, opportunity in proactive_opportunities.iterrows():
+            if opportunity['operational_status'] == 'FAULT':
+                ticket_type = "🚨 FAULT RESPONSE"
+                priority = "CRITICAL"
+                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5  # Premium for emergency
+                action = "Contact immediately - Emergency service"
+            else:
+                ticket_type = "📅 PREVENTIVE SERVICE"
+                priority = "HIGH"
+                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
+                action = "Schedule within 72 hours"
+            
+            tickets.append({
+                'Ticket ID': f"TK-{random.randint(10000, 99999)}",
+                'Type': ticket_type,
+                'Generator': opportunity['serial_number'],
+                'Customer': opportunity['customer_name'][:25] + "...",
+                'Contact': opportunity['customer_contact'],
+                'Issue': opportunity['fault_description'] if opportunity['fault_description'] else f"Service due in {opportunity['next_service_hours']} hours",
+                'Priority': priority,
+                'Est. Revenue': f"${estimated_revenue:,.0f}",
+                'Action Required': action
+            })
+        
+        tickets_df = pd.DataFrame(tickets)
+        st.dataframe(tickets_df, use_container_width=True, hide_index=True)
+        
+        # Quick contact actions
+        st.subheader("📞 Quick Customer Contact")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📧 Send Email Notifications", use_container_width=True, type="primary"):
+                st.success(f"✅ Email notifications sent to {len(tickets)} customers!")
+                st.info("📋 Auto-generated service proposals attached")
+        
+        with col2:
+            if st.button("📱 Generate Call List", use_container_width=True):
+                st.success("📞 Call list generated and assigned to service team")
+                st.download_button(
+                    "📄 Download Call List",
+                    data=tickets_df.to_csv(index=False),
+                    file_name=f"service_calls_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+        
+        with col3:
+            if st.button("🎫 Create Work Orders", use_container_width=True):
+                st.success(f"✅ {len(tickets)} work orders created in system")
+                st.info("💰 Estimated total revenue: ${:,.0f}".format(sum([CONFIG['revenue_targets']['service_revenue_per_ticket'] for _ in tickets])))
+    
+    else:
+        st.success("✅ No immediate proactive notifications required - All generators operating normally!")
+    
+    # Fleet status overview
+    st.subheader("🗺️ Fleet Status Overview")
+    
+    # Status summary
+    status_summary = status_df['operational_status'].value_counts()
     
     col1, col2 = st.columns(2)
     
     with col1:
-        # Use cached calculations
-        total_capacity = generators_df['rated_kw'].sum()
-        active_contracts = len(generators_df[generators_df['service_contract'] != 'No Contract'])
-        
-        st.metric("Total Fleet Capacity", f"{total_capacity:,.0f} kW")
-        st.metric("Active Service Contracts", f"{active_contracts} of {len(generators_df)}")
-        
-        # Simple pie chart
-        contract_dist = generators_df['service_contract'].value_counts()
-        fig = px.pie(values=contract_dist.values, names=contract_dist.index,
-                    title="Service Contract Distribution", height=300)
-        fig.update_traces(textposition='inside', textinfo='percent+label')
+        fig = px.pie(
+            values=status_summary.values, 
+            names=status_summary.index,
+            title="Generator Operational Status",
+            color_discrete_map={
+                'RUNNING': '#4CAF50',
+                'FAULT': '#F44336', 
+                'STANDBY': '#9E9E9E',
+                'MAINTENANCE': '#FF9800'
+            }
+        )
         st.plotly_chart(fig, use_container_width=True)
     
     with col2:
-        # Customer tier analysis
-        tier_counts = generators_df['customer_tier'].value_counts()
-        fig2 = px.bar(x=tier_counts.index, y=tier_counts.values,
-                     title="Generators by Customer Tier", height=300)
-        st.plotly_chart(fig2, use_container_width=True)
+        # Revenue opportunities by customer
+        revenue_by_customer = status_df[status_df['revenue_opportunity'] == True].groupby('customer_name').size().reset_index()
+        revenue_by_customer.columns = ['Customer', 'Opportunities']
+        revenue_by_customer = revenue_by_customer.sort_values('Opportunities', ascending=False).head(10)
         
-        # Simplified opportunities
-        st.markdown("**💡 Revenue Opportunities:**")
-        st.write("🔧 12 units due for service ($180K)")
-        st.write("📦 Filter replacements ($45K)")
-        st.write("📋 8 contract upgrades ($320K)")
+        fig2 = px.bar(
+            revenue_by_customer, 
+            x='Opportunities', 
+            y='Customer',
+            title="Top Revenue Opportunities by Customer",
+            orientation='h'
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
-def show_optimized_fleet_monitoring():
-    """Optimized fleet monitoring with lazy loading."""
-    st.title("🗺️ Fleet Monitoring Dashboard")
-    
-    # Load base data
-    generators_df = load_base_generator_data()
-    
-    # Quick metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    online_count = len(generators_df[generators_df['warranty_status'] == 'Active'])
-    service_due = len(generators_df[generators_df['next_service_hours'] < 100])
-    
-    with col1:
-        st.metric("Total Fleet", len(generators_df))
-    with col2:
-        st.metric("Online", online_count)
-    with col3:
-        st.metric("Service Due", service_due)
-    with col4:
-        st.metric("Avg Health", "87.5%")
-    
-    # Option to load detailed map
-    if st.button("🗺️ Load Detailed Map View"):
-        with st.spinner("Loading real-time sensor data..."):
-            sensor_data = generate_sensor_data(generators_df)
-            
-            # Simplified map
-            view_state = pdk.ViewState(latitude=24.7136, longitude=46.6753, zoom=6)
-            
-            layer = pdk.Layer(
-                'ScatterplotLayer', data=sensor_data,
-                get_position='[lon, lat]', get_color='color',
-                get_radius='size', radius_scale=200, pickable=True
-            )
-            
-            deck_map = pdk.Deck(
-                map_style='mapbox://styles/mapbox/light-v9',
-                initial_view_state=view_state, layers=[layer],
-                tooltip={'text': '{generator_id} - {status}\nHealth: {health_score}%'}
-            )
-            
-            st.pydeck_chart(deck_map)
-    
-    # Simplified alerts
-    st.subheader("🚨 Current Alerts")
-    alerts_data = [
-        {'Generator': 'PS-2021-0003', 'Alert': 'Low oil pressure', 'Priority': 'High'},
-        {'Generator': 'PS-2020-0008', 'Alert': 'Coolant temperature high', 'Priority': 'Medium'},
-        {'Generator': 'PS-2021-0015', 'Alert': 'Service due', 'Priority': 'Low'}
-    ]
-    st.dataframe(pd.DataFrame(alerts_data), use_container_width=True, hide_index=True)
+# ========================================
+# ENHANCED CUSTOMER PORTAL
+# ========================================
 
-def show_optimized_customer_portal():
-    """Optimized customer portal."""
-    st.title("🏢 Customer Portal")
+def show_enhanced_customer_portal():
+    """Enhanced customer portal with real-time generator status and sensor readings."""
+    st.title("🏢 Customer Portal - Real-Time Generator Monitoring")
+    st.markdown("### Live Status • Sensor Readings • Operational Health")
     
+    # Load data
     generators_df = load_base_generator_data()
+    status_df = generate_real_time_status(generators_df)
     
     # Customer selection
     customers = generators_df['customer_name'].unique()
-    selected_customer = st.selectbox("Select Organization:", customers)
+    selected_customer = st.selectbox("Select Your Organization:", customers, key="customer_select")
     
-    customer_gens = generators_df[generators_df['customer_name'] == selected_customer]
+    # Filter data for selected customer
+    customer_generators = generators_df[generators_df['customer_name'] == selected_customer]
+    customer_status = status_df[status_df['customer_name'] == selected_customer]
     
-    if customer_gens.empty:
-        st.error("No generators found")
+    if customer_generators.empty:
+        st.error("No generators found for selected customer")
         return
     
-    # Customer metrics
-    col1, col2, col3, col4 = st.columns(4)
+    st.markdown(f"### Welcome, {selected_customer}")
     
-    total_capacity = customer_gens['rated_kw'].sum()
-    active_count = len(customer_gens)
+    # Real-time notifications for customer
+    fault_generators = customer_status[customer_status['operational_status'] == 'FAULT']
+    service_due_generators = customer_status[customer_status['needs_proactive_contact'] == True]
+    
+    if not fault_generators.empty:
+        st.markdown("""
+        <div class="proactive-alert">
+            <h4>🚨 URGENT: Generator Fault Detected</h4>
+            <p>One or more of your generators has detected a fault. Our service team will contact you shortly.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    if not service_due_generators.empty:
+        st.info(f"📅 **Service Reminder:** {len(service_due_generators)} generator(s) due for scheduled maintenance within 72 hours")
+    
+    # Customer fleet overview
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    total_capacity = customer_generators['rated_kw'].sum()
+    running_count = len(customer_status[customer_status['operational_status'] == 'RUNNING'])
+    fault_count = len(customer_status[customer_status['operational_status'] == 'FAULT'])
+    standby_count = len(customer_status[customer_status['operational_status'] == 'STANDBY'])
+    avg_load = customer_status['load_percent'].mean()
     
     with col1:
-        st.metric("Fleet Health", "🟢 Excellent")
-    with col2:
         st.metric("Total Capacity", f"{total_capacity:,.0f} kW")
+    with col2:
+        st.metric("🟢 Running", running_count, delta="Active")
     with col3:
-        st.metric("Active Units", active_count)
+        st.metric("🔴 Faults", fault_count, delta="⚠️ Attention" if fault_count > 0 else "✅ Normal")
     with col4:
-        st.metric("Uptime", "🟢 99.2%")
+        st.metric("⚪ Standby", standby_count, delta="Ready")
+    with col5:
+        st.metric("Average Load", f"{avg_load:.1f}%")
     
-    # Simplified fleet status
-    st.subheader("🔋 Your Generator Fleet")
+    # Detailed generator status with live sensor readings
+    st.subheader("⚡ Your Generator Fleet - Live Status & Sensor Readings")
     
-    fleet_display = customer_gens[['serial_number', 'model_series', 'location_city', 'warranty_status']].copy()
-    fleet_display.columns = ['Serial Number', 'Model', 'Location', 'Status']
+    # Create detailed status display
+    for _, gen_status in customer_status.iterrows():
+        gen_info = customer_generators[customer_generators['serial_number'] == gen_status['serial_number']].iloc[0]
+        
+        # Choose appropriate styling based on status
+        status_class = f"generator-{gen_status['status_color']}"
+        
+        # Status indicators
+        if gen_status['operational_status'] == 'RUNNING':
+            status_icon = "🟢 RUNNING"
+            status_detail = f"Load: {gen_status['load_percent']}% | All systems normal"
+        elif gen_status['operational_status'] == 'FAULT':
+            status_icon = "🔴 FAULT"
+            status_detail = f"⚠️ {gen_status['fault_description']}"
+        elif gen_status['operational_status'] == 'STANDBY':
+            status_icon = "⚪ STANDBY"
+            status_detail = "Generator ready - Not currently needed"
+        else:  # MAINTENANCE
+            status_icon = "🟡 MAINTENANCE"
+            status_detail = "Scheduled maintenance in progress"
+        
+        col1, col2 = st.columns([2, 3])
+        
+        with col1:
+            st.markdown(f"""
+            <div class="{status_class}">
+                <h4>{gen_status['serial_number']} - {status_icon}</h4>
+                <p><strong>Model:</strong> {gen_info['model_series']}</p>
+                <p><strong>Capacity:</strong> {gen_info['rated_kw']} kW</p>
+                <p><strong>Status:</strong> {status_detail}</p>
+                <p><strong>Location:</strong> {gen_info['location_city']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            # Live sensor readings
+            sensor_col1, sensor_col2, sensor_col3, sensor_col4 = st.columns(4)
+            
+            with sensor_col1:
+                oil_color = "🟢" if gen_status['oil_pressure'] >= 28 else "🟡" if gen_status['oil_pressure'] >= 25 else "🔴"
+                st.metric(
+                    "Oil Pressure", 
+                    f"{gen_status['oil_pressure']} PSI",
+                    delta=f"{oil_color} Normal" if gen_status['oil_pressure'] >= 28 else f"{oil_color} Alert"
+                )
+            
+            with sensor_col2:
+                temp_color = "🟢" if gen_status['coolant_temp'] <= 95 else "🟡" if gen_status['coolant_temp'] <= 105 else "🔴"
+                st.metric(
+                    "Coolant Temp", 
+                    f"{gen_status['coolant_temp']}°C",
+                    delta=f"{temp_color} Normal" if gen_status['coolant_temp'] <= 95 else f"{temp_color} Alert"
+                )
+            
+            with sensor_col3:
+                vib_color = "🟢" if gen_status['vibration'] <= 4.0 else "🟡" if gen_status['vibration'] <= 5.0 else "🔴"
+                st.metric(
+                    "Vibration", 
+                    f"{gen_status['vibration']} mm/s",
+                    delta=f"{vib_color} Normal" if gen_status['vibration'] <= 4.0 else f"{vib_color} Alert"
+                )
+            
+            with sensor_col4:
+                fuel_color = "🟢" if gen_status['fuel_level'] >= 50 else "🟡" if gen_status['fuel_level'] >= 20 else "🔴"
+                st.metric(
+                    "Fuel Level", 
+                    f"{gen_status['fuel_level']}%",
+                    delta=f"{fuel_color} Good" if gen_status['fuel_level'] >= 50 else f"{fuel_color} Low"
+                )
+        
+        st.markdown("---")
     
-    st.dataframe(fleet_display, use_container_width=True, hide_index=True)
+    # Quick service requests
+    st.subheader("🚀 Service & Support")
     
-    # Quick actions
-    st.subheader("🚀 Quick Actions")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("📅 Schedule Service", use_container_width=True):
-            st.success("✅ Service scheduled!")
+        if st.button("📅 Schedule Maintenance", use_container_width=True):
+            st.success("✅ Maintenance request submitted! Our team will contact you within 2 hours.")
     
     with col2:
-        if st.button("🚨 Emergency Call", use_container_width=True, type="primary"):
-            st.success("🚨 Emergency dispatch!")
+        if st.button("🚨 Report Emergency", use_container_width=True, type="primary"):
+            st.success("🚨 Emergency ticket created! Technician dispatched - ETA: 45 minutes")
     
     with col3:
-        if st.button("🛒 Order Parts", use_container_width=True):
-            st.success("🛒 Parts ordered!")
+        if st.button("🛒 Request Parts Quote", use_container_width=True):
+            st.success("🛒 Parts specialist will contact you with a quote within 4 hours")
     
     with col4:
-        if st.button("🔍 Run Diagnostics", use_container_width=True):
-            st.success("🔍 Diagnostics complete!")
+        if st.button("📞 Contact Support", use_container_width=True):
+            st.success("📞 Support ticket created. Response time: 1 hour")
+    
+    # Fleet performance summary
+    st.subheader("📊 Fleet Performance Summary")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Status distribution pie chart
+        status_counts = customer_status['operational_status'].value_counts()
+        fig = px.pie(
+            values=status_counts.values,
+            names=status_counts.index,
+            title="Current Fleet Status",
+            color_discrete_map={
+                'RUNNING': '#4CAF50',
+                'FAULT': '#F44336',
+                'STANDBY': '#9E9E9E', 
+                'MAINTENANCE': '#FF9800'
+            }
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Load distribution
+        fig2 = px.bar(
+            x=customer_status['serial_number'],
+            y=customer_status['load_percent'],
+            title="Generator Load Distribution",
+            labels={'x': 'Generator', 'y': 'Load %'}
+        )
+        fig2.update_xaxis(tickangle=45)
+        st.plotly_chart(fig2, use_container_width=True)
 
 # ========================================
 # MAIN APPLICATION
 # ========================================
 
 def main():
-    """Optimized main application."""
+    """Main application with work management focus."""
     
     # Initialize session state
     if 'authenticated' not in st.session_state:
@@ -498,32 +674,28 @@ def main():
     
     # Authentication check
     if not st.session_state.authenticated:
-        authenticate_manufacturer()
+        authenticate_system()
         return
     
-    # Simplified sidebar
+    # Sidebar
     st.sidebar.markdown(f"### {st.session_state.role_name}")
+    st.sidebar.write("Power System Work Management")
     
     if st.sidebar.button("🚪 Logout"):
         st.session_state.authenticated = False
         st.rerun()
     
-    # Optimized navigation
-    if st.session_state.user_role == "ceo@powersystem":
+    st.sidebar.markdown("---")
+    
+    # Role-based navigation (CEO Dashboard removed)
+    if st.session_state.user_role in ["operations@powersystem", "service@powersystem", "sales@powersystem"]:
         pages = {
-            "👔 CEO Dashboard": show_optimized_ceo_dashboard,
-            "🗺️ Fleet Monitoring": show_optimized_fleet_monitoring,
-            "🏢 Customer Portal": show_optimized_customer_portal
+            "🎫 Work Management": show_work_management_dashboard,
+            "🏢 Customer Portal": show_enhanced_customer_portal
         }
-    elif st.session_state.user_role == "customer@powersystem":
+    else:  # customer@powersystem
         pages = {
-            "🏢 My Dashboard": show_optimized_customer_portal
-        }
-    else:
-        pages = {
-            "💰 Dashboard": show_optimized_ceo_dashboard,
-            "🗺️ Fleet View": show_optimized_fleet_monitoring,
-            "🏢 Customers": show_optimized_customer_portal
+            "🏢 My Generators": show_enhanced_customer_portal
         }
     
     selected_page = st.sidebar.selectbox("Navigate:", list(pages.keys()))
@@ -533,13 +705,22 @@ def main():
         pages[selected_page]()
     except Exception as e:
         st.error(f"Error loading page: {str(e)}")
-        st.info("Please try refreshing the page or selecting a different view.")
+        st.info("Please try refreshing the page.")
     
-    # Simplified sidebar info
+    # Sidebar status
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### ⚡ Platform Status")
-    st.sidebar.success("✅ All systems operational")
+    st.sidebar.markdown("### 🎯 System Status")
+    st.sidebar.success("✅ Real-time monitoring active")
     st.sidebar.info(f"🕒 Last update: {datetime.now().strftime('%H:%M:%S')}")
+    
+    # Key platform features
+    st.sidebar.markdown("### ⚡ Platform Features")
+    st.sidebar.markdown("✅ Proactive Service Notifications")
+    st.sidebar.markdown("✅ Advanced Ticketing System")
+    st.sidebar.markdown("✅ Real-time Generator Status")
+    st.sidebar.markdown("✅ Live Sensor Monitoring")
+    st.sidebar.markdown("✅ Revenue Optimization")
+    st.sidebar.markdown("✅ Customer Self-Service Portal")
 
 if __name__ == "__main__":
     main()
