@@ -147,45 +147,65 @@ def load_base_generator_data() -> pd.DataFrame:
     # Load existing data
     df = pd.read_csv(generators_file)
     
-    # Check if customer_contact column exists, if not add it
-    if 'customer_contact' not in df.columns:
-        # Generate customer contacts based on customer names
+    # Check if new contact columns exist, if not add them
+    contact_columns = ['primary_contact_name', 'primary_contact_phone', 'primary_contact_email', 
+                      'alt_contact_name', 'alt_contact_phone', 'alt_contact_email']
+    
+    missing_columns = [col for col in contact_columns if col not in df.columns]
+    
+    if missing_columns:
+        # Add comprehensive contact information
         contact_mapping = {
-            'King Faisal Medical City': 'ahmed.alrashid@kfmc.sa',
-            'Riyadh Mall Complex': 'ops@riyadhmall.com',
-            'SABIC Industrial': 'maint@sabic.com',
-            'ARAMCO Office Tower': 'facility@aramco.com',
-            'Al Rajhi Banking HQ': 'tech@alrajhi.com',
-            'STC Data Center': 'ops@stc.sa',
-            'NEOM Construction': 'eng@neom.sa',
-            'Red Sea Project': 'maint@redsea.sa',
-            'Saudi Airlines Hub': 'tech@saudiairlines.com',
-            'KAUST Research': 'facility@kaust.edu.sa',
-            'PIF Headquarters': 'ops@pif.gov.sa',
-            'Vision 2030 Center': 'tech@vision2030.sa',
-            'Ministry Complex': 'maint@ministry.gov.sa',
-            'Royal Hospital': 'eng@royalhospital.sa',
-            'Diplomatic Quarter': 'ops@diplomatic.sa',
-            'Financial District': 'tech@financial.sa',
-            'Entertainment City': 'facility@entertainment.sa',
-            'Sports Boulevard': 'ops@sportsboulevard.sa',
-            'Green Riyadh': 'eng@greenriyadh.sa',
-            'ROSHN Development': 'tech@roshn.sa',
-            'ENOWA Energy Hub': 'ops@enowa.sa',
-            'THE LINE Project': 'eng@theline.sa',
-            'Oxagon Port': 'facility@oxagon.sa',
-            'Trojena Resort': 'tech@trojena.sa',
-            'Al-Ula Heritage': 'ops@alula.sa',
-            'Qiddiya Venue': 'facility@qiddiya.sa',
-            'SPARK Sports': 'tech@spark.sa',
-            'Mukaab Tower': 'eng@mukaab.sa',
-            'Diriyah Gate': 'ops@diriyah.sa',
-            'King Salman Park': 'facility@kingsalmanpark.sa'
+            'King Faisal Medical City': {
+                'primary_contact_name': 'Ahmed Al-Rashid', 'primary_contact_phone': '+966-11-464-7272', 'primary_contact_email': 'ahmed.alrashid@kfmc.sa',
+                'alt_contact_name': 'Fahad Al-Mahmoud', 'alt_contact_phone': '+966-11-464-7273', 'alt_contact_email': 'fahad.mahmoud@kfmc.sa'
+            },
+            'Riyadh Mall Complex': {
+                'primary_contact_name': 'Mohammed Al-Saud', 'primary_contact_phone': '+966-11-234-5678', 'primary_contact_email': 'mohammed.saud@riyadhmall.com',
+                'alt_contact_name': 'Khalid Operations', 'alt_contact_phone': '+966-11-234-5679', 'alt_contact_email': 'ops@riyadhmall.com'
+            },
+            'SABIC Industrial': {
+                'primary_contact_name': 'Abdullah Al-Otaibi', 'primary_contact_phone': '+966-13-337-0000', 'primary_contact_email': 'abdullah.otaibi@sabic.com',
+                'alt_contact_name': 'Maintenance Team', 'alt_contact_phone': '+966-13-337-0001', 'alt_contact_email': 'maint@sabic.com'
+            },
+            'ARAMCO Office Tower': {
+                'primary_contact_name': 'Saleh Al-Ghamdi', 'primary_contact_phone': '+966-13-872-3000', 'primary_contact_email': 'saleh.ghamdi@aramco.com',
+                'alt_contact_name': 'Facilities Manager', 'alt_contact_phone': '+966-13-872-3001', 'alt_contact_email': 'facility@aramco.com'
+            },
+            'Al Rajhi Banking HQ': {
+                'primary_contact_name': 'Omar Al-Rajhi', 'primary_contact_phone': '+966-11-828-2888', 'primary_contact_email': 'omar.rajhi@alrajhi.com',
+                'alt_contact_name': 'Technical Support', 'alt_contact_phone': '+966-11-828-2889', 'alt_contact_email': 'tech@alrajhi.com'
+            },
+            'STC Data Center': {
+                'primary_contact_name': 'Nasser Al-Dosari', 'primary_contact_phone': '+966-11-455-0000', 'primary_contact_email': 'nasser.dosari@stc.sa',
+                'alt_contact_name': 'Data Center Ops', 'alt_contact_phone': '+966-11-455-0001', 'alt_contact_email': 'ops@stc.sa'
+            },
+            'NEOM Construction': {
+                'primary_contact_name': 'Turki Al-Sheikh', 'primary_contact_phone': '+966-50-123-4567', 'primary_contact_email': 'turki.sheikh@neom.sa',
+                'alt_contact_name': 'Engineering Team', 'alt_contact_phone': '+966-50-123-4568', 'alt_contact_email': 'eng@neom.sa'
+            },
+            'Red Sea Project': {
+                'primary_contact_name': 'Majed Al-Harbi', 'primary_contact_phone': '+966-12-234-5678', 'primary_contact_email': 'majed.harbi@redsea.sa',
+                'alt_contact_name': 'Maintenance Coord', 'alt_contact_phone': '+966-12-234-5679', 'alt_contact_email': 'maint@redsea.sa'
+            }
         }
         
-        df['customer_contact'] = df['customer_name'].map(contact_mapping).fillna('contact@customer.sa')
+        # Default contact info for unmapped customers
+        default_contact = {
+            'primary_contact_name': 'Facility Manager', 'primary_contact_phone': '+966-11-000-0000', 'primary_contact_email': 'contact@customer.sa',
+            'alt_contact_name': 'Operations Team', 'alt_contact_phone': '+966-11-000-0001', 'alt_contact_email': 'ops@customer.sa'
+        }
+        
+        for col in contact_columns:
+            if col not in df.columns:
+                df[col] = df['customer_name'].apply(lambda x: contact_mapping.get(x, default_contact).get(col, default_contact[col]))
         
         # Save updated data
+        df.to_csv(generators_file, index=False)
+    
+    # Check if customer_contact column exists, if not add it  
+    if 'customer_contact' not in df.columns:
+        df['customer_contact'] = df['primary_contact_email']  # Use primary email as main contact
         df.to_csv(generators_file, index=False)
     
     # Check if installation_date exists, if not add it
@@ -198,33 +218,97 @@ def load_base_generator_data() -> pd.DataFrame:
     return df
 
 def _generate_enhanced_generator_data() -> Dict:
-    """Generate enhanced generator data with operational status."""
+    """Generate enhanced generator data with comprehensive contact information."""
+    
+    # Generate contact information for each customer
+    contact_data = [
+        {
+            'customer': 'King Faisal Medical City',
+            'primary_contact_name': 'Ahmed Al-Rashid', 'primary_contact_phone': '+966-11-464-7272', 'primary_contact_email': 'ahmed.alrashid@kfmc.sa',
+            'alt_contact_name': 'Fahad Al-Mahmoud', 'alt_contact_phone': '+966-11-464-7273', 'alt_contact_email': 'fahad.mahmoud@kfmc.sa'
+        },
+        {
+            'customer': 'Riyadh Mall Complex',
+            'primary_contact_name': 'Mohammed Al-Saud', 'primary_contact_phone': '+966-11-234-5678', 'primary_contact_email': 'mohammed.saud@riyadhmall.com',
+            'alt_contact_name': 'Khalid Operations', 'alt_contact_phone': '+966-11-234-5679', 'alt_contact_email': 'ops@riyadhmall.com'
+        },
+        {
+            'customer': 'SABIC Industrial',
+            'primary_contact_name': 'Abdullah Al-Otaibi', 'primary_contact_phone': '+966-13-337-0000', 'primary_contact_email': 'abdullah.otaibi@sabic.com',
+            'alt_contact_name': 'Maintenance Team', 'alt_contact_phone': '+966-13-337-0001', 'alt_contact_email': 'maint@sabic.com'
+        },
+        {
+            'customer': 'ARAMCO Office Tower',
+            'primary_contact_name': 'Saleh Al-Ghamdi', 'primary_contact_phone': '+966-13-872-3000', 'primary_contact_email': 'saleh.ghamdi@aramco.com',
+            'alt_contact_name': 'Facilities Manager', 'alt_contact_phone': '+966-13-872-3001', 'alt_contact_email': 'facility@aramco.com'
+        },
+        {
+            'customer': 'Al Rajhi Banking HQ',
+            'primary_contact_name': 'Omar Al-Rajhi', 'primary_contact_phone': '+966-11-828-2888', 'primary_contact_email': 'omar.rajhi@alrajhi.com',
+            'alt_contact_name': 'Technical Support', 'alt_contact_phone': '+966-11-828-2889', 'alt_contact_email': 'tech@alrajhi.com'
+        },
+        {
+            'customer': 'STC Data Center',
+            'primary_contact_name': 'Nasser Al-Dosari', 'primary_contact_phone': '+966-11-455-0000', 'primary_contact_email': 'nasser.dosari@stc.sa',
+            'alt_contact_name': 'Data Center Ops', 'alt_contact_phone': '+966-11-455-0001', 'alt_contact_email': 'ops@stc.sa'
+        },
+        {
+            'customer': 'NEOM Construction',
+            'primary_contact_name': 'Turki Al-Sheikh', 'primary_contact_phone': '+966-50-123-4567', 'primary_contact_email': 'turki.sheikh@neom.sa',
+            'alt_contact_name': 'Engineering Team', 'alt_contact_phone': '+966-50-123-4568', 'alt_contact_email': 'eng@neom.sa'
+        },
+        {
+            'customer': 'Red Sea Project',
+            'primary_contact_name': 'Majed Al-Harbi', 'primary_contact_phone': '+966-12-234-5678', 'primary_contact_email': 'majed.harbi@redsea.sa',
+            'alt_contact_name': 'Maintenance Coord', 'alt_contact_phone': '+966-12-234-5679', 'alt_contact_email': 'maint@redsea.sa'
+        }
+    ]
+    
+    # Extend contact data to cover all 30 generators
+    extended_contacts = []
+    for i in range(30):
+        base_contact = contact_data[i % len(contact_data)]
+        if i >= len(contact_data):
+            # Generate variations for additional entries
+            suffix = f"-{i//len(contact_data) + 1}"
+            extended_contacts.append({
+                'customer': base_contact['customer'] + f" Branch {i//len(contact_data) + 1}",
+                'primary_contact_name': base_contact['primary_contact_name'],
+                'primary_contact_phone': base_contact['primary_contact_phone'].replace(base_contact['primary_contact_phone'][-1], str(i)),
+                'primary_contact_email': base_contact['primary_contact_email'],
+                'alt_contact_name': base_contact['alt_contact_name'],
+                'alt_contact_phone': base_contact['alt_contact_phone'].replace(base_contact['alt_contact_phone'][-1], str(i)),
+                'alt_contact_email': base_contact['alt_contact_email']
+            })
+        else:
+            extended_contacts.append(base_contact)
+    
+    # Use original customer names for first 30
+    customer_names = [
+        'King Faisal Medical City', 'Riyadh Mall Complex', 'SABIC Industrial', 'ARAMCO Office Tower',
+        'Al Rajhi Banking HQ', 'STC Data Center', 'NEOM Construction', 'Red Sea Project',
+        'Saudi Airlines Hub', 'KAUST Research', 'PIF Headquarters', 'Vision 2030 Center',
+        'Ministry Complex', 'Royal Hospital', 'Diplomatic Quarter', 'Financial District',
+        'Entertainment City', 'Sports Boulevard', 'Green Riyadh', 'ROSHN Development',
+        'ENOWA Energy Hub', 'THE LINE Project', 'Oxagon Port', 'Trojena Resort',
+        'Al-Ula Heritage', 'Qiddiya Venue', 'SPARK Sports', 'Mukaab Tower',
+        'Diriyah Gate', 'King Salman Park'
+    ]
+    
     return {
         'serial_number': [f'PS-{2020 + i//4}-{i:04d}' for i in range(1, 31)],
         'model_series': ([
             'PS-2000 Series', 'PS-1500 Series', 'PS-1000 Series', 'PS-800 Series',
             'PS-2500 Industrial', 'PS-2000 Commercial', 'PS-1800 Healthcare', 'PS-1200 Retail'
         ] * 4)[:30],
-        'customer_name': [
-            'King Faisal Medical City', 'Riyadh Mall Complex', 'SABIC Industrial', 'ARAMCO Office Tower',
-            'Al Rajhi Banking HQ', 'STC Data Center', 'NEOM Construction', 'Red Sea Project',
-            'Saudi Airlines Hub', 'KAUST Research', 'PIF Headquarters', 'Vision 2030 Center',
-            'Ministry Complex', 'Royal Hospital', 'Diplomatic Quarter', 'Financial District',
-            'Entertainment City', 'Sports Boulevard', 'Green Riyadh', 'ROSHN Development',
-            'ENOWA Energy Hub', 'THE LINE Project', 'Oxagon Port', 'Trojena Resort',
-            'Al-Ula Heritage', 'Qiddiya Venue', 'SPARK Sports', 'Mukaab Tower',
-            'Diriyah Gate', 'King Salman Park'
-        ],
-        'customer_contact': [
-            'ahmed.alrashid@kfmc.sa', 'ops@riyadhmall.com', 'maint@sabic.com', 'facility@aramco.com',
-            'tech@alrajhi.com', 'ops@stc.sa', 'eng@neom.sa', 'maint@redsea.sa',
-            'tech@saudiairlines.com', 'facility@kaust.edu.sa', 'ops@pif.gov.sa', 'tech@vision2030.sa',
-            'maint@ministry.gov.sa', 'eng@royalhospital.sa', 'ops@diplomatic.sa', 'tech@financial.sa',
-            'facility@entertainment.sa', 'ops@sportsboulevard.sa', 'eng@greenriyadh.sa', 'tech@roshn.sa',
-            'ops@enowa.sa', 'eng@theline.sa', 'facility@oxagon.sa', 'tech@trojena.sa',
-            'ops@alula.sa', 'facility@qiddiya.sa', 'tech@spark.sa', 'eng@mukaab.sa',
-            'ops@diriyah.sa', 'facility@kingsalmanpark.sa'
-        ],
+        'customer_name': customer_names,
+        'primary_contact_name': [contact['primary_contact_name'] for contact in extended_contacts],
+        'primary_contact_phone': [contact['primary_contact_phone'] for contact in extended_contacts],
+        'primary_contact_email': [contact['primary_contact_email'] for contact in extended_contacts],
+        'alt_contact_name': [contact['alt_contact_name'] for contact in extended_contacts],
+        'alt_contact_phone': [contact['alt_contact_phone'] for contact in extended_contacts],
+        'alt_contact_email': [contact['alt_contact_email'] for contact in extended_contacts],
+        'customer_contact': [contact['primary_contact_email'] for contact in extended_contacts],  # Keep for backward compatibility
         'rated_kw': [
             2000, 1500, 1000, 800, 2500, 2000, 1800, 1200,
             1000, 750, 600, 400, 2200, 1800, 1400, 900,
@@ -702,7 +786,10 @@ def show_ticket_action_management(status_df, interval_service_df):
         show_ticket_history_management(all_tickets)
 
 def get_all_tickets_for_action(status_df, interval_service_df):
-    """Get all tickets formatted for action management."""
+    """Get all tickets formatted for action management with enhanced contact info."""
+    # Load generator data to get contact information
+    generators_df = load_base_generator_data()
+    
     # Get fault opportunities
     fault_opportunities = status_df[
         (status_df['needs_proactive_contact'] == True) | 
@@ -717,6 +804,20 @@ def get_all_tickets_for_action(status_df, interval_service_df):
     # Add fault tickets
     for _, opportunity in fault_opportunities.iterrows():
         try:
+            # Get contact info from generators_df
+            gen_info = generators_df[generators_df['serial_number'] == opportunity['serial_number']]
+            if not gen_info.empty:
+                gen_data = gen_info.iloc[0]
+                primary_contact_name = gen_data.get('primary_contact_name', 'N/A')
+                primary_contact_phone = gen_data.get('primary_contact_phone', 'N/A')
+                primary_contact_email = gen_data.get('primary_contact_email', 'N/A')
+                alt_contact_name = gen_data.get('alt_contact_name', 'N/A')
+                alt_contact_phone = gen_data.get('alt_contact_phone', 'N/A')
+                alt_contact_email = gen_data.get('alt_contact_email', 'N/A')
+            else:
+                primary_contact_name = primary_contact_phone = primary_contact_email = 'N/A'
+                alt_contact_name = alt_contact_phone = alt_contact_email = 'N/A'
+            
             if opportunity['operational_status'] == 'FAULT':
                 ticket_type = "🚨 FAULT RESPONSE"
                 priority = "CRITICAL"
@@ -736,6 +837,12 @@ def get_all_tickets_for_action(status_df, interval_service_df):
                 'generator': opportunity['serial_number'],
                 'customer': opportunity['customer_name'],
                 'contact': opportunity['customer_contact'],
+                'primary_contact_name': primary_contact_name,
+                'primary_contact_phone': primary_contact_phone,
+                'primary_contact_email': primary_contact_email,
+                'alt_contact_name': alt_contact_name,
+                'alt_contact_phone': alt_contact_phone,
+                'alt_contact_email': alt_contact_email,
                 'priority': priority,
                 'urgency': urgency,
                 'service_detail': service_detail,
@@ -751,6 +858,20 @@ def get_all_tickets_for_action(status_df, interval_service_df):
     # Add interval service tickets
     for _, service in interval_opportunities.iterrows():
         try:
+            # Get contact info from generators_df
+            gen_info = generators_df[generators_df['serial_number'] == service['serial_number']]
+            if not gen_info.empty:
+                gen_data = gen_info.iloc[0]
+                primary_contact_name = gen_data.get('primary_contact_name', 'N/A')
+                primary_contact_phone = gen_data.get('primary_contact_phone', 'N/A')
+                primary_contact_email = gen_data.get('primary_contact_email', 'N/A')
+                alt_contact_name = gen_data.get('alt_contact_name', 'N/A')
+                alt_contact_phone = gen_data.get('alt_contact_phone', 'N/A')
+                alt_contact_email = gen_data.get('alt_contact_email', 'N/A')
+            else:
+                primary_contact_name = primary_contact_phone = primary_contact_email = 'N/A'
+                alt_contact_name = alt_contact_phone = alt_contact_email = 'N/A'
+            
             if service['service_status'] == 'OVERDUE':
                 ticket_type = f"🔴 {service['service_name'].upper()}"
                 priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
@@ -772,9 +893,15 @@ def get_all_tickets_for_action(status_df, interval_service_df):
                 'generator': service['serial_number'],
                 'customer': service['customer_name'],
                 'contact': service['customer_contact'],
+                'primary_contact_name': primary_contact_name,
+                'primary_contact_phone': primary_contact_phone,
+                'primary_contact_email': primary_contact_email,
+                'alt_contact_name': alt_contact_name,
+                'alt_contact_phone': alt_contact_phone,
+                'alt_contact_email': alt_contact_email,
                 'priority': priority,
                 'urgency': urgency,
-                'service_detail': service['service_detail'],
+                'service_detail': service_detail,
                 'revenue_sar': format_currency(estimated_revenue_usd),
                 'runtime_hours': service['runtime_hours'],
                 'status': 'PENDING',
@@ -808,7 +935,7 @@ def show_ticket_notes_management(all_tickets):
                 selected_ticket = next((t for t in all_tickets if t['ticket_id'] == ticket_id), None)
                 
                 if selected_ticket:
-                    # Display ticket info
+                    # Display comprehensive ticket info including contacts
                     st.markdown(f"""
                     **📋 Ticket Details:**
                     - **ID:** {selected_ticket['ticket_id']}
@@ -817,6 +944,21 @@ def show_ticket_notes_management(all_tickets):
                     - **Customer:** {selected_ticket['customer'][:30]}...
                     - **Priority:** {selected_ticket['priority']}
                     - **Revenue:** {selected_ticket['revenue_sar']}
+                    """)
+                    
+                    # Contact Information Section
+                    st.markdown("**👤 Primary Contact:**")
+                    st.markdown(f"""
+                    - **Name:** {selected_ticket['primary_contact_name']}
+                    - **Phone:** {selected_ticket['primary_contact_phone']}
+                    - **Email:** {selected_ticket['primary_contact_email']}
+                    """)
+                    
+                    st.markdown("**👥 Alternate Contact:**")
+                    st.markdown(f"""
+                    - **Name:** {selected_ticket['alt_contact_name']}
+                    - **Phone:** {selected_ticket['alt_contact_phone']}
+                    - **Email:** {selected_ticket['alt_contact_email']}
                     """)
                     
                     # Status update
@@ -838,6 +980,45 @@ def show_ticket_notes_management(all_tickets):
                         index=0,
                         key=f"status_select_{ticket_id}"
                     )
+                    
+                    # Quick contact actions
+                    st.markdown("**📞 Quick Contact Actions:**")
+                    
+                    col1a, col1b = st.columns(2)
+                    
+                    with col1a:
+                        if st.button("📞 Call Primary", use_container_width=True, key=f"call_primary_{ticket_id}"):
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            contact_note = f"\n[{timestamp}] Called primary contact: {selected_ticket['primary_contact_name']} at {selected_ticket['primary_contact_phone']}"
+                            current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                            st.session_state[f"notes_{ticket_id}"] = current_notes + contact_note
+                            st.success(f"📞 Calling {selected_ticket['primary_contact_name']}")
+                    
+                    with col1b:
+                        if st.button("📞 Call Alternate", use_container_width=True, key=f"call_alt_{ticket_id}"):
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            contact_note = f"\n[{timestamp}] Called alternate contact: {selected_ticket['alt_contact_name']} at {selected_ticket['alt_contact_phone']}"
+                            current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                            st.session_state[f"notes_{ticket_id}"] = current_notes + contact_note
+                            st.success(f"📞 Calling {selected_ticket['alt_contact_name']}")
+                    
+                    col1c, col1d = st.columns(2)
+                    
+                    with col1c:
+                        if st.button("📧 Email Primary", use_container_width=True, key=f"email_primary_{ticket_id}"):
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            email_note = f"\n[{timestamp}] Emailed primary: {selected_ticket['primary_contact_email']}"
+                            current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                            st.session_state[f"notes_{ticket_id}"] = current_notes + email_note
+                            st.success(f"📧 Email sent to {selected_ticket['primary_contact_name']}")
+                    
+                    with col1d:
+                        if st.button("📧 Email Alternate", use_container_width=True, key=f"email_alt_{ticket_id}"):
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                            email_note = f"\n[{timestamp}] Emailed alternate: {selected_ticket['alt_contact_email']}"
+                            current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                            st.session_state[f"notes_{ticket_id}"] = current_notes + email_note
+                            st.success(f"📧 Email sent to {selected_ticket['alt_contact_name']}")
     
     with col2:
         if 'selected_ticket' in locals() and selected_ticket:
@@ -968,6 +1149,13 @@ def show_quick_work_order_creation(all_tickets):
             **Schedule:** {schedule_priority if 'schedule_priority' in locals() else 'TBD'}
             """)
             
+            # Contact Information in Work Order
+            st.markdown("**📞 Customer Contacts:**")
+            st.markdown(f"""
+            **Primary:** {selected_ticket['primary_contact_name']} - {selected_ticket['primary_contact_phone']}  
+            **Alternate:** {selected_ticket['alt_contact_name']} - {selected_ticket['alt_contact_phone']}
+            """)
+            
             # WO Creation buttons
             col2a, col2b = st.columns(2)
             
@@ -976,29 +1164,34 @@ def show_quick_work_order_creation(all_tickets):
                     # Update ticket status
                     st.session_state[f"status_{ticket_id}"] = "SCHEDULED - Service booked"
                     
-                    # Add WO note
+                    # Add WO note with contact info
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
                     wo_note = f"\n[{timestamp}] Work Order {wo_number} created - Assigned to {selected_tech.split('(')[0].strip()}"
+                    wo_note += f"\nPrimary Contact: {selected_ticket['primary_contact_name']} - {selected_ticket['primary_contact_phone']}"
+                    wo_note += f"\nAlternate Contact: {selected_ticket['alt_contact_name']} - {selected_ticket['alt_contact_phone']}"
                     current_notes = st.session_state.get(f"notes_{ticket_id}", "")
                     st.session_state[f"notes_{ticket_id}"] = current_notes + wo_note
                     
                     st.success(f"✅ Work Order {wo_number} created!")
                     st.info(f"👷 Assigned to: {selected_tech.split('(')[0].strip()}")
-                    st.info(f"📧 Customer notification sent")
+                    st.info(f"📧 Customer notification sent to both contacts")
             
             with col2b:
                 if st.button("📧 Send Quote First", use_container_width=True, key="send_quote_quick"):
                     # Update ticket status
                     st.session_state[f"status_{ticket_id}"] = "QUOTED - Quote sent"
                     
-                    # Add quote note
+                    # Add quote note with contact info
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
                     quote_note = f"\n[{timestamp}] Service quote sent - {selected_ticket['revenue_sar']}"
+                    quote_note += f"\nSent to: {selected_ticket['primary_contact_name']} ({selected_ticket['primary_contact_email']})"
+                    quote_note += f"\nCC: {selected_ticket['alt_contact_name']} ({selected_ticket['alt_contact_email']})"
                     current_notes = st.session_state.get(f"notes_{ticket_id}", "")
                     st.session_state[f"notes_{ticket_id}"] = current_notes + quote_note
                     
                     st.success(f"📧 Quote sent to {selected_ticket['customer']}")
                     st.info(f"💰 Amount: {selected_ticket['revenue_sar']}")
+                    st.info(f"📨 Sent to both primary and alternate contacts")
 
 def show_ticket_history_management(all_tickets):
     """Display ticket history and bulk actions."""
@@ -1021,6 +1214,8 @@ def show_ticket_history_management(all_tickets):
             'Type': ticket['type'],
             'Generator': ticket['generator'],
             'Customer': ticket['customer'][:25] + "...",
+            'Primary Contact': f"{ticket['primary_contact_name']} - {ticket['primary_contact_phone']}",
+            'Alt Contact': f"{ticket['alt_contact_name']} - {ticket['alt_contact_phone']}",
             'Revenue': ticket['revenue_sar'],
             'Notes': len(st.session_state.get(f"notes_{ticket_id}", "")) > 0
         })
@@ -1119,6 +1314,11 @@ def show_filtered_tickets(status_df, interval_service_df, active_filter):
     # Add fault tickets
     for _, opportunity in fault_opportunities.iterrows():
         try:
+            # Get contact info from generators_df  
+            generators_df = load_base_generator_data()
+            gen_info = generators_df[generators_df['serial_number'] == opportunity['serial_number']]
+            gen_data = gen_info.iloc[0] if not gen_info.empty else None
+            
             if opportunity['operational_status'] == 'FAULT':
                 ticket_type = "🚨 FAULT RESPONSE"
                 priority = "CRITICAL"
@@ -1141,7 +1341,8 @@ def show_filtered_tickets(status_df, interval_service_df, active_filter):
                 'Type': ticket_type,
                 'Generator': opportunity['serial_number'],
                 'Customer': opportunity['customer_name'][:20] + "...",
-                'Contact': opportunity['customer_contact'],
+                'Primary Contact': f"{gen_data.get('primary_contact_name', 'N/A')} - {gen_data.get('primary_contact_phone', 'N/A')}" if gen_data is not None else 'N/A',
+                'Contact Email': gen_data.get('primary_contact_email', 'N/A') if gen_data is not None else 'N/A',
                 'Service Detail': service_detail,
                 'Runtime Hours': f"{opportunity.get('runtime_hours', 5000):,} hrs",
                 'Parts Needed': parts_needed,
@@ -1157,6 +1358,11 @@ def show_filtered_tickets(status_df, interval_service_df, active_filter):
     # Add interval service tickets
     for _, service in interval_opportunities.iterrows():
         try:
+            # Get contact info from generators_df
+            generators_df = load_base_generator_data()
+            gen_info = generators_df[generators_df['serial_number'] == service['serial_number']]
+            gen_data = gen_info.iloc[0] if not gen_info.empty else None
+            
             if service['service_status'] == 'OVERDUE':
                 ticket_type = f"🔴 {service['service_name'].upper()}"
                 priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
@@ -1177,7 +1383,8 @@ def show_filtered_tickets(status_df, interval_service_df, active_filter):
                 'Type': ticket_type,
                 'Generator': service['serial_number'],
                 'Customer': service['customer_name'][:20] + "...",
-                'Contact': service['customer_contact'],
+                'Primary Contact': f"{gen_data.get('primary_contact_name', 'N/A')} - {gen_data.get('primary_contact_phone', 'N/A')}" if gen_data is not None else 'N/A',
+                'Contact Email': gen_data.get('primary_contact_email', 'N/A') if gen_data is not None else 'N/A',
                 'Service Detail': service['service_detail'],
                 'Runtime Hours': f"{service['runtime_hours']:,} hrs",
                 'Parts Needed': service['parts_needed'],
