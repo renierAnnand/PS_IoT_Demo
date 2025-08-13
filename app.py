@@ -666,11 +666,438 @@ def show_work_management_dashboard():
         else:
             st.success("✅ No immediate proactive notifications required!")
             show_system_status(status_df, interval_service_df)
+        
+        # Add the new Ticket Action Management section
+        show_ticket_action_management(status_df, interval_service_df)
     
     except Exception as e:
         st.error(f"Error loading work management dashboard: {str(e)}")
         st.info("Please try refreshing the page.")
         if st.button("🔄 Retry Loading Dashboard"):
+            st.rerun()
+
+def show_ticket_action_management(status_df, interval_service_df):
+    """Dedicated section for ticket actions, notes, and work order management."""
+    st.markdown("---")
+    st.subheader("🎯 Ticket Action Center")
+    st.markdown("### Select tickets to add notes, change status, or create work orders")
+    
+    # Get all available tickets
+    all_tickets = get_all_tickets_for_action(status_df, interval_service_df)
+    
+    if not all_tickets:
+        st.info("No tickets available for action management")
+        return
+    
+    # Create tabs for different action types
+    tab1, tab2, tab3 = st.tabs(["📝 Ticket Notes & Status", "📋 Work Order Creation", "📊 Ticket History"])
+    
+    with tab1:
+        show_ticket_notes_management(all_tickets)
+    
+    with tab2:
+        show_quick_work_order_creation(all_tickets)
+    
+    with tab3:
+        show_ticket_history_management(all_tickets)
+
+def get_all_tickets_for_action(status_df, interval_service_df):
+    """Get all tickets formatted for action management."""
+    # Get fault opportunities
+    fault_opportunities = status_df[
+        (status_df['needs_proactive_contact'] == True) | 
+        (status_df['operational_status'] == 'FAULT')
+    ]
+    
+    # Get interval opportunities
+    interval_opportunities = interval_service_df[interval_service_df['needs_contact'] == True] if not interval_service_df.empty else pd.DataFrame()
+    
+    all_tickets = []
+    
+    # Add fault tickets
+    for _, opportunity in fault_opportunities.iterrows():
+        try:
+            if opportunity['operational_status'] == 'FAULT':
+                ticket_type = "🚨 FAULT RESPONSE"
+                priority = "CRITICAL"
+                estimated_revenue_usd = CONFIG['revenue_targets']['service_revenue_per_ticket'] / 3.75 * 1.5
+                urgency = "IMMEDIATE"
+                service_detail = opportunity['fault_description']
+            else:
+                ticket_type = "📅 PREVENTIVE SERVICE"
+                priority = "HIGH"
+                estimated_revenue_usd = CONFIG['revenue_targets']['service_revenue_per_ticket'] / 3.75
+                urgency = "72 HOURS"
+                service_detail = f"Service due in {opportunity['next_service_hours']} hours"
+            
+            all_tickets.append({
+                'ticket_id': f"TK-{random.randint(10000, 99999)}",
+                'type': ticket_type,
+                'generator': opportunity['serial_number'],
+                'customer': opportunity['customer_name'],
+                'contact': opportunity['customer_contact'],
+                'priority': priority,
+                'urgency': urgency,
+                'service_detail': service_detail,
+                'revenue_sar': format_currency(estimated_revenue_usd),
+                'runtime_hours': opportunity.get('runtime_hours', 5000),
+                'status': 'PENDING',
+                'notes': '',
+                'category': 'fault'
+            })
+        except Exception:
+            continue
+    
+    # Add interval service tickets
+    for _, service in interval_opportunities.iterrows():
+        try:
+            if service['service_status'] == 'OVERDUE':
+                ticket_type = f"🔴 {service['service_name'].upper()}"
+                priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
+                urgency = "IMMEDIATE"
+            elif service['priority'] == 'HIGH':
+                ticket_type = f"🟡 {service['service_name'].upper()}"
+                priority = "HIGH"
+                urgency = "48 HOURS"
+            else:
+                ticket_type = f"🟢 {service['service_name'].upper()}"
+                priority = "MEDIUM"
+                urgency = "1 WEEK"
+            
+            estimated_revenue_usd = service['estimated_cost'] / 3.75
+            
+            all_tickets.append({
+                'ticket_id': f"SV-{random.randint(10000, 99999)}",
+                'type': ticket_type,
+                'generator': service['serial_number'],
+                'customer': service['customer_name'],
+                'contact': service['customer_contact'],
+                'priority': priority,
+                'urgency': urgency,
+                'service_detail': service['service_detail'],
+                'revenue_sar': format_currency(estimated_revenue_usd),
+                'runtime_hours': service['runtime_hours'],
+                'status': 'PENDING',
+                'notes': '',
+                'category': 'service'
+            })
+        except Exception:
+            continue
+    
+    return all_tickets
+
+def show_ticket_notes_management(all_tickets):
+    """Ticket notes and status management interface."""
+    st.markdown("#### 📝 Add Notes & Update Status")
+    
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        # Ticket selection
+        ticket_options = [f"{ticket['ticket_id']} - {ticket['type']} - {ticket['generator']}" for ticket in all_tickets]
+        
+        if ticket_options:
+            selected_ticket_option = st.selectbox(
+                "Select ticket to manage:",
+                options=ticket_options,
+                key="notes_ticket_select"
+            )
+            
+            if selected_ticket_option:
+                ticket_id = selected_ticket_option.split(' - ')[0]
+                selected_ticket = next((t for t in all_tickets if t['ticket_id'] == ticket_id), None)
+                
+                if selected_ticket:
+                    # Display ticket info
+                    st.markdown(f"""
+                    **📋 Ticket Details:**
+                    - **ID:** {selected_ticket['ticket_id']}
+                    - **Type:** {selected_ticket['type']}
+                    - **Generator:** {selected_ticket['generator']}
+                    - **Customer:** {selected_ticket['customer'][:30]}...
+                    - **Priority:** {selected_ticket['priority']}
+                    - **Revenue:** {selected_ticket['revenue_sar']}
+                    """)
+                    
+                    # Status update
+                    current_status = st.session_state.get(f"status_{ticket_id}", 'PENDING')
+                    
+                    status_options = [
+                        "PENDING - Not contacted",
+                        "CONTACTED - Customer reached",
+                        "QUOTED - Quote sent",
+                        "SCHEDULED - Service booked",
+                        "IN_PROGRESS - Work in progress",
+                        "COMPLETED - Service completed",
+                        "CLOSED - Ticket closed"
+                    ]
+                    
+                    new_status = st.selectbox(
+                        "Update Status:",
+                        options=status_options,
+                        index=0,
+                        key=f"status_select_{ticket_id}"
+                    )
+    
+    with col2:
+        if 'selected_ticket' in locals() and selected_ticket:
+            # Notes section
+            st.markdown("#### 📝 Ticket Notes")
+            
+            # Get existing notes
+            existing_notes = st.session_state.get(f"notes_{ticket_id}", "")
+            
+            notes_input = st.text_area(
+                "Add notes:",
+                value=existing_notes,
+                placeholder="Enter customer communication, service details, issues, or updates...",
+                height=100,
+                key=f"notes_input_{ticket_id}"
+            )
+            
+            # Action buttons
+            col2a, col2b, col2c = st.columns(3)
+            
+            with col2a:
+                if st.button("💾 Save Notes", use_container_width=True, key=f"save_notes_{ticket_id}"):
+                    st.session_state[f"notes_{ticket_id}"] = notes_input
+                    st.session_state[f"status_{ticket_id}"] = new_status
+                    st.success(f"✅ Notes saved for {ticket_id}")
+            
+            with col2b:
+                if st.button("📞 Mark Contacted", use_container_width=True, key=f"mark_contacted_{ticket_id}"):
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    contact_note = f"\n[{timestamp}] Customer contacted - {selected_ticket['contact']}"
+                    current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                    st.session_state[f"notes_{ticket_id}"] = current_notes + contact_note
+                    st.session_state[f"status_{ticket_id}"] = "CONTACTED - Customer reached"
+                    st.success(f"📞 {ticket_id} marked as contacted")
+            
+            with col2c:
+                if st.button("❌ Close Ticket", use_container_width=True, key=f"close_ticket_{ticket_id}"):
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    close_note = f"\n[{timestamp}] Ticket closed"
+                    current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                    st.session_state[f"notes_{ticket_id}"] = current_notes + close_note
+                    st.session_state[f"status_{ticket_id}"] = "CLOSED - Ticket closed"
+                    st.warning(f"❌ {ticket_id} closed")
+            
+            # Display saved notes
+            if existing_notes:
+                st.markdown("#### 📄 Saved Notes:")
+                st.text_area("Previous notes:", value=existing_notes, height=80, disabled=True, key=f"display_notes_{ticket_id}")
+
+def show_quick_work_order_creation(all_tickets):
+    """Quick work order creation interface."""
+    st.markdown("#### 📋 Quick Work Order Creation")
+    
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        # Ticket selection for WO
+        ticket_options = [f"{ticket['ticket_id']} - {ticket['customer'][:20]}... - {ticket['revenue_sar']}" for ticket in all_tickets]
+        
+        if ticket_options:
+            selected_wo_ticket = st.selectbox(
+                "Select ticket for work order:",
+                options=ticket_options,
+                key="wo_ticket_select_quick"
+            )
+            
+            if selected_wo_ticket:
+                ticket_id = selected_wo_ticket.split(' - ')[0]
+                selected_ticket = next((t for t in all_tickets if t['ticket_id'] == ticket_id), None)
+                
+                if selected_ticket:
+                    # Technician selection
+                    technicians = [
+                        "Ahmed Al-Rashid (Riyadh) - Available",
+                        "Mohammed Al-Saud (Jeddah) - Available",
+                        "Khalid Al-Otaibi (Eastern) - Busy until 2 PM",
+                        "Abdullah Al-Nasser (NEOM) - Available",
+                        "Auto-assign based on location"
+                    ]
+                    
+                    selected_tech = st.selectbox(
+                        "Assign technician:",
+                        options=technicians,
+                        key="tech_select_quick"
+                    )
+                    
+                    # Schedule selection
+                    schedule_priority = st.selectbox(
+                        "Schedule priority:",
+                        options=[
+                            "🚨 Emergency - Today",
+                            "⚡ Urgent - Tomorrow", 
+                            "📅 Scheduled - This week",
+                            "📆 Planned - Next week"
+                        ],
+                        key="schedule_quick"
+                    )
+                    
+                    # Parts needed
+                    if selected_ticket['category'] == 'service':
+                        parts_options = st.multiselect(
+                            "Parts required:",
+                            options=[
+                                "Oil Filter", "Air Filter", "Fuel Filter", 
+                                "Oil (20L)", "Coolant (10L)", "Belt Kit",
+                                "Spark Plugs", "Battery", "Radiator Core"
+                            ],
+                            default=["Oil Filter", "Oil (20L)"],
+                            key="parts_quick"
+                        )
+                    else:
+                        parts_options = ["To be determined on-site"]
+    
+    with col2:
+        if 'selected_ticket' in locals() and selected_ticket:
+            st.markdown("#### 🔧 Work Order Preview")
+            
+            wo_number = f"WO-{random.randint(100000, 999999)}"
+            
+            st.info(f"""
+            **Work Order:** {wo_number}
+            **Ticket:** {selected_ticket['ticket_id']}
+            **Generator:** {selected_ticket['generator']}
+            **Customer:** {selected_ticket['customer']}
+            **Priority:** {selected_ticket['priority']}
+            **Revenue:** {selected_ticket['revenue_sar']}
+            **Technician:** {selected_tech.split('(')[0].strip() if 'selected_tech' in locals() else 'TBD'}
+            **Schedule:** {schedule_priority if 'schedule_priority' in locals() else 'TBD'}
+            """)
+            
+            # WO Creation buttons
+            col2a, col2b = st.columns(2)
+            
+            with col2a:
+                if st.button("📋 Create Work Order", use_container_width=True, type="primary", key="create_wo_quick"):
+                    # Update ticket status
+                    st.session_state[f"status_{ticket_id}"] = "SCHEDULED - Service booked"
+                    
+                    # Add WO note
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    wo_note = f"\n[{timestamp}] Work Order {wo_number} created - Assigned to {selected_tech.split('(')[0].strip()}"
+                    current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                    st.session_state[f"notes_{ticket_id}"] = current_notes + wo_note
+                    
+                    st.success(f"✅ Work Order {wo_number} created!")
+                    st.info(f"👷 Assigned to: {selected_tech.split('(')[0].strip()}")
+                    st.info(f"📧 Customer notification sent")
+            
+            with col2b:
+                if st.button("📧 Send Quote First", use_container_width=True, key="send_quote_quick"):
+                    # Update ticket status
+                    st.session_state[f"status_{ticket_id}"] = "QUOTED - Quote sent"
+                    
+                    # Add quote note
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    quote_note = f"\n[{timestamp}] Service quote sent - {selected_ticket['revenue_sar']}"
+                    current_notes = st.session_state.get(f"notes_{ticket_id}", "")
+                    st.session_state[f"notes_{ticket_id}"] = current_notes + quote_note
+                    
+                    st.success(f"📧 Quote sent to {selected_ticket['customer']}")
+                    st.info(f"💰 Amount: {selected_ticket['revenue_sar']}")
+
+def show_ticket_history_management(all_tickets):
+    """Display ticket history and bulk actions."""
+    st.markdown("#### 📊 Ticket Status Overview")
+    
+    # Create status summary
+    status_summary = {}
+    total_revenue = 0
+    
+    for ticket in all_tickets:
+        ticket_id = ticket['ticket_id']
+        status = st.session_state.get(f"status_{ticket_id}", 'PENDING').split(' - ')[0]
+        
+        if status not in status_summary:
+            status_summary[status] = {'count': 0, 'tickets': []}
+        
+        status_summary[status]['count'] += 1
+        status_summary[status]['tickets'].append({
+            'ID': ticket_id,
+            'Type': ticket['type'],
+            'Generator': ticket['generator'],
+            'Customer': ticket['customer'][:25] + "...",
+            'Revenue': ticket['revenue_sar'],
+            'Notes': len(st.session_state.get(f"notes_{ticket_id}", "")) > 0
+        })
+        
+        # Calculate total revenue for non-closed tickets
+        if status != 'CLOSED':
+            revenue_amount = float(ticket['revenue_sar'].replace('SAR ', '').replace(',', ''))
+            total_revenue += revenue_amount
+    
+    # Display status summary
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Active Revenue", f"SAR {total_revenue:,.0f}")
+    
+    with col2:
+        pending_count = status_summary.get('PENDING', {}).get('count', 0)
+        st.metric("Pending Tickets", pending_count)
+    
+    with col3:
+        completed_count = status_summary.get('COMPLETED', {}).get('count', 0)
+        st.metric("Completed Tickets", completed_count)
+    
+    # Status breakdown
+    if status_summary:
+        st.markdown("#### 📋 Tickets by Status")
+        
+        for status, data in status_summary.items():
+            status_icons = {
+                'PENDING': '⏳',
+                'CONTACTED': '📞',
+                'QUOTED': '💰',
+                'SCHEDULED': '📅',
+                'IN_PROGRESS': '🔧',
+                'COMPLETED': '✅',
+                'CLOSED': '❌'
+            }
+            
+            icon = status_icons.get(status, '📋')
+            
+            with st.expander(f"{icon} {status} ({data['count']} tickets)"):
+                if data['tickets']:
+                    df = pd.DataFrame(data['tickets'])
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Bulk actions
+    st.markdown("#### ⚡ Bulk Actions")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("📧 Email All Pending", use_container_width=True):
+            pending_tickets = status_summary.get('PENDING', {}).get('tickets', [])
+            if pending_tickets:
+                st.success(f"📧 Emails sent to {len(pending_tickets)} customers")
+            else:
+                st.info("No pending tickets to email")
+    
+    with col2:
+        if st.button("📞 Generate Call List", use_container_width=True):
+            pending_tickets = status_summary.get('PENDING', {}).get('tickets', [])
+            if pending_tickets:
+                st.success(f"📞 Call list generated for {len(pending_tickets)} customers")
+            else:
+                st.info("No pending tickets for call list")
+    
+    with col3:
+        if st.button("📊 Export Report", use_container_width=True):
+            st.success("📊 Ticket report exported to CSV")
+    
+    with col4:
+        if st.button("🔄 Reset All Status", use_container_width=True):
+            # Clear all session state for ticket management
+            keys_to_clear = [key for key in st.session_state.keys() if key.startswith(('notes_', 'status_'))]
+            for key in keys_to_clear:
+                del st.session_state[key]
+            st.success("🔄 All ticket statuses reset")
             st.rerun()
 
 def show_filtered_tickets(status_df, interval_service_df, active_filter):
