@@ -510,7 +510,7 @@ def show_work_management_dashboard():
                 <h4>🎫 Active Tickets</h4>
                 <h2>{total_opportunities}</h2>
                 <p>Revenue opportunities</p>
-                <p style='font-size:12px;'>🚨 {fault_opportunities} faults | ⏰ {interval_opportunities} intervals</p>
+                <p style='font-size:12px;'>🚨 {fault_opportunities_count} faults | ⏰ {interval_opportunities_count} intervals</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -557,81 +557,82 @@ def show_work_management_dashboard():
         # Proactive notifications section - COMBINED fault and service tickets
         st.subheader("🔔 Proactive Customer Notifications")
         
-        # Combine fault-based and interval service opportunities
-        fault_opportunities = status_df[
-            (status_df['needs_proactive_contact'] == True) | 
-            (status_df['operational_status'] == 'FAULT')
-        ].copy()
-        
-        # Get interval service opportunities
-        interval_opportunities = interval_service_df[interval_service_df['needs_contact'] == True].copy()
+        # Use the previously calculated DataFrames
+        fault_opportunities = status_opportunities
+        interval_opportunities = interval_opportunities_df
         
         # Combine both types of tickets
         combined_tickets = []
         
         # Add fault-based tickets
         for _, opportunity in fault_opportunities.iterrows():
-            if opportunity['operational_status'] == 'FAULT':
-                ticket_type = "🚨 FAULT RESPONSE"
-                priority = "CRITICAL"
-                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
-                action = "Contact immediately - Emergency service"
-                service_detail = opportunity['fault_description']
-                parts_needed = "TBD"
-                runtime_hours = opportunity.get('runtime_hours', 5000)
-            else:
-                ticket_type = "📅 PREVENTIVE SERVICE"
-                priority = "HIGH"
-                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
-                action = "Schedule within 72 hours"
-                service_detail = f"Service due in {opportunity['next_service_hours']} hours"
-                parts_needed = "Oil Filter, Oil"
-                runtime_hours = opportunity.get('runtime_hours', 5000)
-            
-            combined_tickets.append({
-                'Ticket ID': f"TK-{random.randint(10000, 99999)}",
-                'Type': ticket_type,
-                'Generator': opportunity['serial_number'],
-                'Customer': opportunity['customer_name'][:20] + "...",
-                'Contact': opportunity['customer_contact'],
-                'Service Detail': service_detail,
-                'Runtime Hours': f"{runtime_hours:,} hrs",
-                'Parts Needed': parts_needed,
-                'Priority': priority,
-                'Est. Revenue': f"${estimated_revenue:,.0f}",
-                'Action Required': action,
-                'Ticket Source': 'fault'
-            })
+            try:
+                if opportunity['operational_status'] == 'FAULT':
+                    ticket_type = "🚨 FAULT RESPONSE"
+                    priority = "CRITICAL"
+                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
+                    action = "Contact immediately - Emergency service"
+                    service_detail = opportunity['fault_description']
+                    parts_needed = "TBD"
+                    runtime_hours = opportunity.get('runtime_hours', 5000)
+                else:
+                    ticket_type = "📅 PREVENTIVE SERVICE"
+                    priority = "HIGH"
+                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
+                    action = "Schedule within 72 hours"
+                    service_detail = f"Service due in {opportunity['next_service_hours']} hours"
+                    parts_needed = "Oil Filter, Oil"
+                    runtime_hours = opportunity.get('runtime_hours', 5000)
+                
+                combined_tickets.append({
+                    'Ticket ID': f"TK-{random.randint(10000, 99999)}",
+                    'Type': ticket_type,
+                    'Generator': opportunity['serial_number'],
+                    'Customer': opportunity['customer_name'][:20] + "...",
+                    'Contact': opportunity['customer_contact'],
+                    'Service Detail': service_detail,
+                    'Runtime Hours': f"{runtime_hours:,} hrs",
+                    'Parts Needed': parts_needed,
+                    'Priority': priority,
+                    'Est. Revenue': f"${estimated_revenue:,.0f}",
+                    'Action Required': action,
+                    'Ticket Source': 'fault'
+                })
+            except Exception as e:
+                continue
         
         # Add interval service tickets
         for _, service in interval_opportunities.iterrows():
-            if service['service_status'] == 'OVERDUE':
-                ticket_type = f"🔴 {service['service_name'].upper()}"
-                priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
-                action = "Contact immediately - Service overdue"
-            elif service['priority'] == 'HIGH':
-                ticket_type = f"🟡 {service['service_name'].upper()}"
-                priority = "HIGH"
-                action = "Schedule within 48 hours"
-            else:
-                ticket_type = f"🟢 {service['service_name'].upper()}"
-                priority = "MEDIUM"
-                action = "Schedule within 1 week"
-            
-            combined_tickets.append({
-                'Ticket ID': f"SV-{random.randint(10000, 99999)}",
-                'Type': ticket_type,
-                'Generator': service['serial_number'],
-                'Customer': service['customer_name'][:20] + "...",
-                'Contact': service['customer_contact'],
-                'Service Detail': service['service_detail'],
-                'Runtime Hours': f"{service['runtime_hours']:,} hrs",
-                'Parts Needed': service['parts_needed'],
-                'Priority': priority,
-                'Est. Revenue': f"${service['estimated_cost']:,.0f}",
-                'Action Required': action,
-                'Ticket Source': 'service'
-            })
+            try:
+                if service['service_status'] == 'OVERDUE':
+                    ticket_type = f"🔴 {service['service_name'].upper()}"
+                    priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
+                    action = "Contact immediately - Service overdue"
+                elif service['priority'] == 'HIGH':
+                    ticket_type = f"🟡 {service['service_name'].upper()}"
+                    priority = "HIGH"
+                    action = "Schedule within 48 hours"
+                else:
+                    ticket_type = f"🟢 {service['service_name'].upper()}"
+                    priority = "MEDIUM"
+                    action = "Schedule within 1 week"
+                
+                combined_tickets.append({
+                    'Ticket ID': f"SV-{random.randint(10000, 99999)}",
+                    'Type': ticket_type,
+                    'Generator': service['serial_number'],
+                    'Customer': service['customer_name'][:20] + "...",
+                    'Contact': service['customer_contact'],
+                    'Service Detail': service['service_detail'],
+                    'Runtime Hours': f"{service['runtime_hours']:,} hrs",
+                    'Parts Needed': service['parts_needed'],
+                    'Priority': priority,
+                    'Est. Revenue': f"${service['estimated_cost']:,.0f}",
+                    'Action Required': action,
+                    'Ticket Source': 'service'
+                })
+            except Exception as e:
+                continue
         
         if combined_tickets:
             st.markdown("""
@@ -665,56 +666,59 @@ def show_work_management_dashboard():
                     for _, row in tickets_df.iterrows()
                 ]
                 
-                selected_ticket = st.selectbox(
-                    "Select ticket to create work order:",
-                    options=ticket_options,
-                    key="wo_ticket_select"
-                )
-                
-                if selected_ticket:
-                    # Get selected ticket details
-                    ticket_id = selected_ticket.split(' - ')[0]
-                    selected_row = tickets_df[tickets_df['Ticket ID'] == ticket_id].iloc[0]
-                    
-                    # Technician assignment
-                    technician_options = [
-                        "Ahmed Al-Rashid (Riyadh Region)",
-                        "Mohammed Al-Saud (Jeddah Region)", 
-                        "Khalid Al-Otaibi (Eastern Region)",
-                        "Abdullah Al-Nasser (NEOM Region)",
-                        "Auto-assign based on location"
-                    ]
-                    
-                    selected_technician = st.selectbox(
-                        "Assign technician:",
-                        options=technician_options,
-                        key="technician_select"
+                if ticket_options:
+                    selected_ticket = st.selectbox(
+                        "Select ticket to create work order:",
+                        options=ticket_options,
+                        key="wo_ticket_select"
                     )
                     
-                    # Schedule options
-                    schedule_options = [
-                        "🚨 Emergency - Same day",
-                        "⚡ Urgent - Within 24 hours", 
-                        "📅 Scheduled - Within 3 days",
-                        "📆 Planned - Within 1 week"
-                    ]
-                    
-                    selected_schedule = st.selectbox(
-                        "Schedule priority:",
-                        options=schedule_options,
-                        key="schedule_select"
-                    )
-                    
-                    # Additional work order notes
-                    wo_notes = st.text_area(
-                        "Work order notes:",
-                        placeholder="Enter special instructions, customer requirements, site access details...",
-                        key="wo_notes"
-                    )
+                    if selected_ticket:
+                        # Get selected ticket details
+                        ticket_id = selected_ticket.split(' - ')[0]
+                        selected_row = tickets_df[tickets_df['Ticket ID'] == ticket_id].iloc[0]
+                        
+                        # Technician assignment
+                        technician_options = [
+                            "Ahmed Al-Rashid (Riyadh Region)",
+                            "Mohammed Al-Saud (Jeddah Region)", 
+                            "Khalid Al-Otaibi (Eastern Region)",
+                            "Abdullah Al-Nasser (NEOM Region)",
+                            "Auto-assign based on location"
+                        ]
+                        
+                        selected_technician = st.selectbox(
+                            "Assign technician:",
+                            options=technician_options,
+                            key="technician_select"
+                        )
+                        
+                        # Schedule options
+                        schedule_options = [
+                            "🚨 Emergency - Same day",
+                            "⚡ Urgent - Within 24 hours", 
+                            "📅 Scheduled - Within 3 days",
+                            "📆 Planned - Within 1 week"
+                        ]
+                        
+                        selected_schedule = st.selectbox(
+                            "Schedule priority:",
+                            options=schedule_options,
+                            key="schedule_select"
+                        )
+                        
+                        # Additional work order notes
+                        wo_notes = st.text_area(
+                            "Work order notes:",
+                            placeholder="Enter special instructions, customer requirements, site access details...",
+                            key="wo_notes"
+                        )
+                else:
+                    st.info("No tickets available for work order creation")
             
             with col2:
                 st.write("**Selected Ticket Details:**")
-                if selected_ticket:
+                if 'selected_ticket' in locals() and selected_ticket and 'selected_row' in locals():
                     st.info(f"""
                     **Generator:** {selected_row['Generator']}
                     **Customer:** {selected_row['Customer']}
@@ -727,37 +731,41 @@ def show_work_management_dashboard():
                 st.write("**🔧 Action Buttons:**")
                 
                 if st.button("📋 Create Work Order", use_container_width=True, type="primary"):
-                    if selected_ticket and selected_technician and selected_schedule:
+                    if 'selected_ticket' in locals() and selected_ticket and 'selected_technician' in locals() and 'selected_schedule' in locals():
                         wo_number = f"WO-{random.randint(100000, 999999)}"
                         st.success(f"✅ Work Order {wo_number} created successfully!")
                         st.info(f"👷 Assigned to: {selected_technician.split('(')[0].strip()}")
                         st.info(f"⏰ Schedule: {selected_schedule}")
-                        st.info(f"📧 Customer notification sent to {selected_row['Contact']}")
+                        if 'selected_row' in locals():
+                            st.info(f"📧 Customer notification sent to {selected_row['Contact']}")
                         
                         # Show work order summary
                         with st.expander("📋 Work Order Summary"):
-                            st.write(f"""
-                            **Work Order:** {wo_number}
-                            **Ticket:** {selected_row['Ticket ID']}
-                            **Generator:** {selected_row['Generator']}
-                            **Customer:** {selected_row['Customer']}
-                            **Service Type:** {selected_row['Type']}
-                            **Technician:** {selected_technician}
-                            **Schedule:** {selected_schedule}
-                            **Estimated Revenue:** {selected_row['Est. Revenue']}
-                            **Parts Required:** {selected_row['Parts Needed']}
-                            **Notes:** {wo_notes if wo_notes else 'None'}
-                            """)
+                            if 'selected_row' in locals():
+                                st.write(f"""
+                                **Work Order:** {wo_number}
+                                **Ticket:** {selected_row['Ticket ID']}
+                                **Generator:** {selected_row['Generator']}
+                                **Customer:** {selected_row['Customer']}
+                                **Service Type:** {selected_row['Type']}
+                                **Technician:** {selected_technician}
+                                **Schedule:** {selected_schedule}
+                                **Estimated Revenue:** {selected_row['Est. Revenue']}
+                                **Parts Required:** {selected_row['Parts Needed']}
+                                **Notes:** {'wo_notes' if 'wo_notes' in locals() and wo_notes else 'None'}
+                                """)
                     else:
                         st.error("Please select all required fields")
                 
                 if st.button("📞 Mark as Contacted", use_container_width=True):
-                    st.success(f"📞 Ticket {ticket_id} marked as contacted")
-                    st.info("⏰ Follow-up reminder set for 24 hours")
+                    if 'ticket_id' in locals():
+                        st.success(f"📞 Ticket {ticket_id} marked as contacted")
+                        st.info("⏰ Follow-up reminder set for 24 hours")
                 
                 if st.button("❌ Close Ticket", use_container_width=True):
-                    st.warning(f"❌ Ticket {ticket_id} closed")
-                    st.info("📝 Reason required for closure")
+                    if 'ticket_id' in locals():
+                        st.warning(f"❌ Ticket {ticket_id} closed")
+                        st.info("📝 Reason required for closure")
                 
                 if st.button("📧 Send Quote", use_container_width=True):
                     st.success("📧 Service quote sent to customer!")
