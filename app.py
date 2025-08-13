@@ -133,13 +133,16 @@ MANUFACTURER_CONFIG = {
 def load_manufacturer_config() -> Dict:
     """Load manufacturer-specific configuration."""
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r') as f:
-            config = json.load(f)
-            # Merge with manufacturer defaults
-            for key, value in MANUFACTURER_CONFIG.items():
-                if key not in config:
-                    config[key] = value
-            return config
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                # Merge with manufacturer defaults
+                for key, value in MANUFACTURER_CONFIG.items():
+                    if key not in config:
+                        config[key] = value
+                return config
+        except Exception:
+            return MANUFACTURER_CONFIG
     else:
         save_manufacturer_config(MANUFACTURER_CONFIG)
         return MANUFACTURER_CONFIG
