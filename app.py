@@ -110,11 +110,21 @@ CONFIG = {
     "refresh_interval": 30,
     "cache_ttl": 300,
     "proactive_notification_hours": 72,
+    "currency": {
+        "symbol": "SAR",
+        "rate": 3.75,  # 1 USD = 3.75 SAR
+        "format": "SAR {:,.0f}"
+    },
     "revenue_targets": {
-        "service_revenue_per_ticket": 850,
-        "parts_revenue_per_ticket": 450
+        "service_revenue_per_ticket": 850 * 3.75,  # Convert to SAR
+        "parts_revenue_per_ticket": 450 * 3.75
     }
 }
+
+def format_currency(amount_usd):
+    """Convert USD to SAR and format properly."""
+    amount_sar = amount_usd * CONFIG["currency"]["rate"]
+    return CONFIG["currency"]["format"].format(amount_sar)
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -355,21 +365,21 @@ def generate_interval_service_data(generators_df: pd.DataFrame) -> pd.DataFrame:
             'name': 'Minor Service',
             'tasks': ['Oil change', 'Oil filter replacement', 'Fuel filter change', 'Air filter check/clean', 'Coolant check', 'Battery inspection', 'Belts inspection', 'General operational checks'],
             'parts': ['Oil Filter', 'Oil (20L)', 'Fuel Filter'],
-            'cost': 450
+            'cost': 450 * 3.75  # Convert to SAR
         },
         'intermediate': {
             'interval': 1000,  # Every 1,000 hours
             'name': 'Intermediate Service',
             'tasks': ['All minor service items', 'Cooling system inspection', 'Exhaust inspection', 'Electrical connections check', 'Alternator inspection', 'Turbocharger check', 'Load testing'],
             'parts': ['Oil Filter', 'Oil (20L)', 'Fuel Filter', 'Air Filter', 'Coolant'],
-            'cost': 850
+            'cost': 850 * 3.75  # Convert to SAR
         },
         'major': {
             'interval': 15000,  # Every 10,000-20,000 hours (using 15,000 as average)
             'name': 'Major Service / Overhaul',
             'tasks': ['Complete engine teardown', 'Engine rebuild', 'Bearings replacement', 'Piston rings replacement', 'Valves replacement', 'Alternator refurbishment', 'Radiator re-core', 'Full electrical inspection'],
             'parts': ['Complete Engine Kit', 'Alternator Parts', 'Radiator Core', 'Electrical Components', 'Oil Filter', 'Oil (40L)', 'Coolant (20L)'],
-            'cost': 12500
+            'cost': 12500 * 3.75  # Convert to SAR
         }
     }
     
@@ -522,6 +532,10 @@ def show_work_management_dashboard():
     st.title("🎫 Work Management & Ticketing System")
     st.markdown("### Proactive Service Scheduling & Revenue Optimization")
     
+    # Initialize filter state
+    if 'active_filter' not in st.session_state:
+        st.session_state.active_filter = 'all'
+    
     try:
         # Load data first
         generators_df = load_base_generator_data()
@@ -562,61 +576,93 @@ def show_work_management_dashboard():
         fault_revenue = fault_opportunities * CONFIG['revenue_targets']['service_revenue_per_ticket']
         potential_revenue = fault_revenue + interval_revenue
         
-        # Key metrics display
+        # Enhanced metric cards with click functionality
+        st.subheader("📊 Key Metrics - Click to Filter")
+        
+        # Show current filter status
+        filter_labels = {
+            'all': 'All Tickets',
+            'active_tickets': 'Active Tickets',
+            'service_due': 'Service Due',
+            'fault_alerts': 'Fault Alerts',
+            'revenue_potential': 'Revenue Potential',
+            'generators_running': 'Generators Running'
+        }
+        
+        current_filter = filter_labels.get(st.session_state.active_filter, 'All Tickets')
+        st.info(f"🔍 **Current Filter:** {current_filter}")
+        
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
+            # Active filter styling
+            card_class = "ticket-card" if st.session_state.active_filter != 'active_tickets' else "ticket-card"
+            border_style = "border: 3px solid #fff;" if st.session_state.active_filter == 'active_tickets' else ""
+            
+            if st.button(f"🎫 Active Tickets\n{total_opportunities}\nRevenue opportunities", key="btn_active_tickets", use_container_width=True):
+                st.session_state.active_filter = 'active_tickets'
+                st.rerun()
+            
             st.markdown(f"""
-            <div class="ticket-card">
-                <h4>🎫 Active Tickets</h4>
-                <h2>{total_opportunities}</h2>
-                <p>Revenue opportunities</p>
-                <p style='font-size:12px;'>🚨 {fault_opportunities} faults | ⏰ {interval_opportunities} intervals</p>
+            <div class="{card_class}" style="{border_style}">
+                <p style='font-size:12px; margin:0;'>🚨 {fault_opportunities} faults | ⏰ {interval_opportunities} intervals</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col2:
-            service_color = "service-due-card" if service_due_count > 0 else "revenue-opportunity"
+            service_color = "service-due-card"
+            border_style = "border: 3px solid #fff;" if st.session_state.active_filter == 'service_due' else ""
+            
+            if st.button(f"⏰ Service Due\n{service_due_count}\nProactive notifications", key="btn_service_due", use_container_width=True):
+                st.session_state.active_filter = 'service_due'
+                st.rerun()
+            
             st.markdown(f"""
-            <div class="{service_color}">
-                <h4>⏰ Service Due</h4>
-                <h2>{service_due_count}</h2>
-                <p>Proactive notifications</p>
-                {"<p style='font-size:12px;'>⚠️ " + str(overdue_service) + " overdue</p>" if overdue_service > 0 else ""}
+            <div class="{service_color}" style="{border_style}">
+                {"<p style='font-size:12px; margin:0;'>⚠️ " + str(overdue_service) + " overdue</p>" if overdue_service > 0 else ""}
             </div>
             """, unsafe_allow_html=True)
         
         with col3:
+            border_style = "border: 3px solid #fff;" if st.session_state.active_filter == 'fault_alerts' else ""
+            
+            if st.button(f"🚨 Fault Alerts\n{fault_count}\nImmediate response needed", key="btn_fault_alerts", use_container_width=True):
+                st.session_state.active_filter = 'fault_alerts'
+                st.rerun()
+            
             st.markdown(f"""
-            <div class="ticket-card">
-                <h4>🚨 Fault Alerts</h4>
-                <h2>{fault_count}</h2>
-                <p>Immediate response needed</p>
+            <div class="ticket-card" style="{border_style}">
             </div>
             """, unsafe_allow_html=True)
         
         with col4:
+            border_style = "border: 3px solid #fff;" if st.session_state.active_filter == 'revenue_potential' else ""
+            
+            if st.button(f"💰 Revenue Potential\n{format_currency(potential_revenue / 3.75)}\nFrom current tickets", key="btn_revenue_potential", use_container_width=True):
+                st.session_state.active_filter = 'revenue_potential'
+                st.rerun()
+            
             st.markdown(f"""
-            <div class="revenue-opportunity">
-                <h4>💰 Revenue Potential</h4>
-                <h2>${potential_revenue:,.0f}</h2>
-                <p>From current tickets</p>
-                <p style='font-size:12px;'>🚨 ${fault_revenue:,.0f} | ⏰ ${interval_revenue:,.0f}</p>
+            <div class="revenue-opportunity" style="{border_style}">
+                <p style='font-size:12px; margin:0;'>🚨 {format_currency(fault_revenue / 3.75)} | ⏰ {format_currency(interval_revenue / 3.75)}</p>
             </div>
             """, unsafe_allow_html=True)
         
         with col5:
+            border_style = "border: 3px solid #fff;" if st.session_state.active_filter == 'generators_running' else ""
+            
+            if st.button(f"⚡ Generators Running\n{running_count}\nOf {total_generators} total", key="btn_generators_running", use_container_width=True):
+                st.session_state.active_filter = 'generators_running'
+                st.rerun()
+            
             st.markdown(f"""
-            <div class="revenue-opportunity">
-                <h4>⚡ Generators Running</h4>
-                <h2>{running_count}</h2>
-                <p>Of {total_generators} total</p>
+            <div class="revenue-opportunity" style="{border_style}">
             </div>
             """, unsafe_allow_html=True)
         
-        # Show tickets if any exist
+        # Show filtered content based on active filter
         if total_opportunities > 0:
-            show_combined_tickets(status_df, interval_service_df)
+            show_filtered_tickets(status_df, interval_service_df, st.session_state.active_filter)
         else:
             st.success("✅ No immediate proactive notifications required!")
             show_system_status(status_df, interval_service_df)
@@ -627,9 +673,9 @@ def show_work_management_dashboard():
         if st.button("🔄 Retry Loading Dashboard"):
             st.rerun()
 
-def show_combined_tickets(status_df, interval_service_df):
-    """Display combined fault and service tickets."""
-    st.subheader("🔔 Proactive Customer Notifications")
+def show_filtered_tickets(status_df, interval_service_df, active_filter):
+    """Display tickets filtered by the selected category."""
+    st.subheader("🔔 Filtered Tickets")
     
     # Get fault opportunities
     fault_opportunities = status_df[
@@ -649,17 +695,19 @@ def show_combined_tickets(status_df, interval_service_df):
             if opportunity['operational_status'] == 'FAULT':
                 ticket_type = "🚨 FAULT RESPONSE"
                 priority = "CRITICAL"
-                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
+                estimated_revenue_usd = CONFIG['revenue_targets']['service_revenue_per_ticket'] / 3.75 * 1.5  # Convert back to USD for calculation
                 action = "Contact immediately - Emergency service"
                 service_detail = opportunity['fault_description']
                 parts_needed = "TBD"
+                ticket_category = 'fault'
             else:
                 ticket_type = "📅 PREVENTIVE SERVICE"
                 priority = "HIGH"
-                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
+                estimated_revenue_usd = CONFIG['revenue_targets']['service_revenue_per_ticket'] / 3.75  # Convert back to USD for calculation
                 action = "Schedule within 72 hours"
                 service_detail = f"Service due in {opportunity['next_service_hours']} hours"
                 parts_needed = "Oil Filter, Oil"
+                ticket_category = 'fault'
             
             combined_tickets.append({
                 'Ticket ID': f"TK-{random.randint(10000, 99999)}",
@@ -671,8 +719,10 @@ def show_combined_tickets(status_df, interval_service_df):
                 'Runtime Hours': f"{opportunity.get('runtime_hours', 5000):,} hrs",
                 'Parts Needed': parts_needed,
                 'Priority': priority,
-                'Est. Revenue': f"${estimated_revenue:,.0f}",
-                'Action Required': action
+                'Est. Revenue': format_currency(estimated_revenue_usd),
+                'Action Required': action,
+                'Category': ticket_category,
+                'Revenue_USD': estimated_revenue_usd
             })
         except Exception:
             continue
@@ -693,6 +743,8 @@ def show_combined_tickets(status_df, interval_service_df):
                 priority = "MEDIUM"
                 action = "Schedule within 1 week"
             
+            estimated_revenue_usd = service['estimated_cost'] / 3.75  # Convert SAR back to USD for consistency
+            
             combined_tickets.append({
                 'Ticket ID': f"SV-{random.randint(10000, 99999)}",
                 'Type': ticket_type,
@@ -703,32 +755,67 @@ def show_combined_tickets(status_df, interval_service_df):
                 'Runtime Hours': f"{service['runtime_hours']:,} hrs",
                 'Parts Needed': service['parts_needed'],
                 'Priority': priority,
-                'Est. Revenue': f"${service['estimated_cost']:,.0f}",
-                'Action Required': action
+                'Est. Revenue': format_currency(estimated_revenue_usd),
+                'Action Required': action,
+                'Category': 'service',
+                'Revenue_USD': estimated_revenue_usd
             })
         except Exception:
             continue
     
     if combined_tickets:
-        st.markdown("""
+        tickets_df = pd.DataFrame(combined_tickets)
+        
+        # Apply filtering based on active_filter
+        if active_filter == 'fault_alerts':
+            filtered_tickets = tickets_df[tickets_df['Category'] == 'fault']
+            filter_title = "🚨 Fault Response Tickets"
+        elif active_filter == 'service_due':
+            filtered_tickets = tickets_df[tickets_df['Category'] == 'service']
+            filter_title = "⏰ Service Due Tickets"
+        elif active_filter == 'revenue_potential':
+            # Sort by revenue - highest first
+            filtered_tickets = tickets_df.sort_values('Revenue_USD', ascending=False)
+            filter_title = "💰 Tickets by Revenue Potential"
+        elif active_filter == 'active_tickets':
+            filtered_tickets = tickets_df
+            filter_title = "🎫 All Active Tickets"
+        elif active_filter == 'generators_running':
+            # Show operational status info instead of tickets
+            st.info("Generator operational status information:")
+            running_gens = status_df[status_df['operational_status'] == 'RUNNING']
+            if not running_gens.empty:
+                status_display = running_gens[['serial_number', 'customer_name', 'load_percent', 'fuel_level']].copy()
+                status_display.columns = ['Generator', 'Customer', 'Load %', 'Fuel %']
+                st.dataframe(status_display, use_container_width=True, hide_index=True)
+            return
+        else:
+            filtered_tickets = tickets_df
+            filter_title = "🎫 All Tickets"
+        
+        st.markdown(f"""
         <div class="proactive-alert">
-            <h4>🚨 Immediate Action Required</h4>
-            <p>The following customers should be contacted proactively to arrange service and maximize revenue:</p>
+            <h4>{filter_title}</h4>
+            <p>Showing {len(filtered_tickets)} of {len(tickets_df)} total tickets</p>
         </div>
         """, unsafe_allow_html=True)
         
-        # Display tickets table
-        tickets_df = pd.DataFrame(combined_tickets)
-        
         # Sort by priority
         priority_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
-        tickets_df['priority_sort'] = tickets_df['Priority'].map(priority_order)
-        tickets_df = tickets_df.sort_values('priority_sort').drop('priority_sort', axis=1)
+        filtered_tickets['priority_sort'] = filtered_tickets['Priority'].map(priority_order)
+        filtered_tickets = filtered_tickets.sort_values('priority_sort').drop(['priority_sort', 'Category', 'Revenue_USD'], axis=1)
         
-        st.dataframe(tickets_df, use_container_width=True, hide_index=True)
+        st.dataframe(filtered_tickets, use_container_width=True, hide_index=True)
+        
+        # Add filter reset button
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🔄 Show All Tickets", use_container_width=True):
+                st.session_state.active_filter = 'all'
+                st.rerun()
         
         # Work Order Management
-        show_work_order_management(tickets_df)
+        show_work_order_management(filtered_tickets)
 
 def show_work_order_management(tickets_df):
     """Work order creation and management interface."""
@@ -809,6 +896,22 @@ def show_work_order_management(tickets_df):
                     st.info(f"👷 Assigned to: {selected_technician.split('(')[0].strip()}")
                 if 'selected_schedule' in locals():
                     st.info(f"⏰ Schedule: {selected_schedule}")
+                
+                # Show work order summary with SAR currency
+                with st.expander("📋 Work Order Summary"):
+                    if 'selected_row' in locals():
+                        st.write(f"""
+                        **Work Order:** {wo_number}
+                        **Ticket:** {selected_row['Ticket ID']}
+                        **Generator:** {selected_row['Generator']}
+                        **Customer:** {selected_row['Customer']}
+                        **Service Type:** {selected_row['Type']}
+                        **Technician:** {selected_technician}
+                        **Schedule:** {selected_schedule}
+                        **Estimated Revenue:** {selected_row['Est. Revenue']}
+                        **Parts Required:** {selected_row['Parts Needed']}
+                        **Notes:** {'wo_notes' if 'wo_notes' in locals() and wo_notes else 'None'}
+                        """)
             else:
                 st.error("Please select all required fields")
         
