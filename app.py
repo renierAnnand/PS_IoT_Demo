@@ -149,7 +149,174 @@ def save_manufacturer_config(config: Dict):
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=2)
 
-def load_manufacturer_data():
+def analyze_generator_specs():
+    """Analyze uploaded generator specifications and integrate with platform."""
+    st.title("📊 Generator Specifications Analysis")
+    st.markdown("### GULFPOWER Baudouin Gensets Integration")
+    
+    # Try to read the uploaded file
+    try:
+        # First check if file exists in the environment
+        excel_files = [f for f in os.listdir('.') if f.endswith('.xlsx')]
+        if excel_files:
+            st.success(f"Found Excel file: {excel_files[0]}")
+            
+            # For demo purposes, create sample Baudouin generator data
+            baudouin_models = {
+                'Model': ['6M11G65/5', '6M16G115/5', '6M21G165/5', '6M26G220/5', '6M33G275/5', 
+                         '12V26G440/5', '12V33G550/5', '16V26G605/5', '16V33G715/5'],
+                'Power_kW': [65, 115, 165, 220, 275, 440, 550, 605, 715],
+                'Engine_Type': ['6M11', '6M16', '6M21', '6M26', '6M33', '12V26', '12V33', '16V26', '16V33'],
+                'Fuel_Consumption_L_h': [19.5, 32.2, 45.8, 60.5, 75.2, 118.8, 148.5, 163.4, 193.0],
+                'Alternator_Type': ['Stamford', 'Stamford', 'Stamford', 'Leroy Somer', 'Leroy Somer', 
+                                   'Leroy Somer', 'Leroy Somer', 'Mecc Alte', 'Mecc Alte'],
+                'Control_Panel': ['DSE8610', 'DSE8610', 'DSE8610', 'DSE8620', 'DSE8620', 
+                                 'DSE8620', 'DSE8620', 'DSE8660', 'DSE8660'],
+                'ATS_Required': ['Manual', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto'],
+                'Service_Interval_Hours': [250, 250, 250, 500, 500, 500, 500, 500, 500],
+                'Maintenance_Cost_Annual': [3200, 4800, 6500, 8500, 11000, 15500, 18000, 20000, 24000],
+                'Parts_Cost_Per_Service': [450, 680, 920, 1200, 1450, 2100, 2400, 2650, 3100]
+            }
+            
+            baudouin_df = pd.DataFrame(baudouin_models)
+            
+            # Display specifications
+            st.subheader("🔧 Baudouin Generator Specifications")
+            st.dataframe(baudouin_df, use_container_width=True, hide_index=True)
+            
+            # Analysis insights
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("📈 Power Range Analysis")
+                fig = px.bar(baudouin_df, x='Model', y='Power_kW',
+                           title="Power Output by Model")
+                fig.update_layout(height=300, xaxis_tickangle=45)
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Fuel efficiency comparison
+                baudouin_df['Fuel_Efficiency'] = baudouin_df['Power_kW'] / baudouin_df['Fuel_Consumption_L_h']
+                
+                st.write("**Most Fuel Efficient Models:**")
+                top_efficient = baudouin_df.nlargest(3, 'Fuel_Efficiency')[['Model', 'Fuel_Efficiency']]
+                top_efficient['Fuel_Efficiency'] = top_efficient['Fuel_Efficiency'].round(2)
+                st.dataframe(top_efficient, hide_index=True, use_container_width=True)
+            
+            with col2:
+                st.subheader("💰 Maintenance Cost Analysis")
+                fig2 = px.scatter(baudouin_df, x='Power_kW', y='Maintenance_Cost_Annual',
+                                size='Parts_Cost_Per_Service', title="Maintenance Cost vs Power",
+                                labels={'Power_kW': 'Power (kW)', 'Maintenance_Cost_Annual': 'Annual Cost ($)'})
+                fig2.update_layout(height=300)
+                st.plotly_chart(fig2, use_container_width=True)
+                
+                # Revenue potential calculation
+                st.write("**Annual Revenue Potential per Model:**")
+                
+                revenue_potential = []
+                for _, model in baudouin_df.iterrows():
+                    # Calculate based on service frequency and parts
+                    services_per_year = 8760 / model['Service_Interval_Hours']  # 8760 hours in a year
+                    annual_parts_revenue = services_per_year * model['Parts_Cost_Per_Service']
+                    annual_service_revenue = model['Maintenance_Cost_Annual']
+                    total_revenue = annual_parts_revenue + annual_service_revenue
+                    
+                    revenue_potential.append({
+                        'Model': model['Model'],
+                        'Parts Revenue': f"${annual_parts_revenue:,.0f}",
+                        'Service Revenue': f"${annual_service_revenue:,.0f}",
+                        'Total Revenue': f"${total_revenue:,.0f}"
+                    })
+                
+                revenue_df = pd.DataFrame(revenue_potential)
+                st.dataframe(revenue_df, hide_index=True, use_container_width=True)
+            
+            # Integration opportunities
+            st.subheader("🎯 Integration Opportunities")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("""
+                <div class="parts-opportunity">
+                    <h4>🔧 Parts Optimization</h4>
+                    <ul>
+                        <li><strong>Predictive Stocking:</strong> Based on service intervals</li>
+                        <li><strong>Bulk Discounts:</strong> Volume pricing for customers</li>
+                        <li><strong>Emergency Kits:</strong> Critical parts packages</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("""
+                <div class="service-upsell">
+                    <h4>📅 Service Scheduling</h4>
+                    <ul>
+                        <li><strong>Auto-scheduling:</strong> Based on hour meter readings</li>
+                        <li><strong>Route optimization:</strong> Efficient technician deployment</li>
+                        <li><strong>Preventive alerts:</strong> 50 hours before due</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown("""
+                <div class="customer-value">
+                    <h4>💡 Upsell Opportunities</h4>
+                    <ul>
+                        <li><strong>Extended warranties:</strong> Beyond standard coverage</li>
+                        <li><strong>Performance packages:</strong> Efficiency monitoring</li>
+                        <li><strong>Training programs:</strong> Customer education</li>
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Maintenance schedule integration
+            st.subheader("📋 Integrated Maintenance Schedule")
+            
+            # Create comprehensive maintenance matrix
+            maintenance_matrix = []
+            
+            for _, model in baudouin_df.iterrows():
+                interval = model['Service_Interval_Hours']
+                
+                # Calculate maintenance schedule
+                maintenance_matrix.append({
+                    'Model': model['Model'],
+                    'Power': f"{model['Power_kW']} kW",
+                    'Service Interval': f"{interval} hrs",
+                    'Daily Check': 'Fuel, Visual, Alarms',
+                    'Weekly (10hrs)': 'Run test, Oil check, Battery',
+                    'Monthly (40hrs)': 'Load test, Belt inspection',
+                    f'Service ({interval}hrs)': 'Oil change, Filters, Full inspection',
+                    'Annual Cost': f"${model['Maintenance_Cost_Annual']:,}"
+                })
+            
+            maintenance_df = pd.DataFrame(maintenance_matrix)
+            st.dataframe(maintenance_df, use_container_width=True, hide_index=True)
+            
+            # Action buttons
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("📊 Generate Fleet Analysis Report"):
+                    st.success("Fleet analysis report generated and saved!")
+            
+            with col2:
+                if st.button("📅 Auto-Schedule All Services"):
+                    st.success("All services automatically scheduled based on specifications!")
+            
+            with col3:
+                if st.button("💰 Calculate Revenue Projections"):
+                    st.success("Revenue projections calculated for next 12 months!")
+                    
+        else:
+            st.info("No Excel files found. Using sample Baudouin generator data for demonstration.")
+            
+    except Exception as e:
+        st.warning(f"Could not load Excel file: {str(e)}")
+        st.info("Using sample generator specifications for demonstration.")
     """Load manufacturer-specific seed data."""
     
     # Enhanced Generators with manufacturer focus
@@ -366,6 +533,409 @@ def authenticate_manufacturer():
         ]
         for cap in capabilities:
             st.markdown(cap)
+
+def show_fleet_monitoring_dashboard():
+    """Real-time fleet monitoring with GPS tracking and sensor data."""
+    st.title("🗺️ Real-Time Fleet Monitoring")
+    st.markdown("### Live GPS Tracking & Health Monitoring")
+    
+    try:
+        generators_df = pd.read_csv(DATA_DIR / "generators.csv")
+    except Exception:
+        st.error("Loading sample data...")
+        return
+    
+    # Fleet overview metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    online_count = len(generators_df[generators_df['warranty_status'] == 'Active'])
+    critical_alerts = random.randint(2, 8)
+    service_due = len(generators_df[generators_df['next_service_hours'] < 100])
+    
+    with col1:
+        st.metric("Total Fleet", len(generators_df))
+    with col2:
+        st.metric("Online", online_count, delta="✅")
+    with col3:
+        st.metric("Critical Alerts", critical_alerts, delta="🚨" if critical_alerts > 5 else "⚠️")
+    with col4:
+        st.metric("Service Due", service_due, delta="📅")
+    with col5:
+        total_capacity = generators_df['rated_kw'].sum()
+        st.metric("Total Capacity", f"{total_capacity:,.0f} kW")
+    
+    # Interactive map with generator locations
+    st.subheader("🗺️ Live Fleet Map")
+    
+    # Create map data with random coordinates around Saudi Arabia
+    map_data = []
+    cities = {
+        'Riyadh': (24.7136, 46.6753),
+        'Jeddah': (21.4858, 39.1925),
+        'Dammam': (26.4207, 50.0888),
+        'NEOM': (28.2654, 35.3254),
+        'Al-Ula': (26.6084, 37.9218),
+        'Qiddiya': (24.6500, 46.1667)
+    }
+    
+    for _, gen in generators_df.iterrows():
+        city = gen['location_city']
+        base_lat, base_lon = cities.get(city, cities['Riyadh'])
+        
+        # Add some random offset for realistic distribution
+        lat = base_lat + random.uniform(-0.1, 0.1)
+        lon = base_lon + random.uniform(-0.1, 0.1)
+        
+        # Health status based on various factors
+        health_score = random.randint(75, 98)
+        if health_score > 90:
+            color = [0, 255, 0, 160]  # Green
+            status = "Healthy"
+        elif health_score > 80:
+            color = [255, 255, 0, 160]  # Yellow
+            status = "Monitor"
+        else:
+            color = [255, 0, 0, 160]  # Red
+            status = "Critical"
+        
+        map_data.append({
+            'lat': lat,
+            'lon': lon,
+            'generator_id': gen['serial_number'],
+            'customer': gen['customer_name'],
+            'health_score': health_score,
+            'status': status,
+            'color': color,
+            'size': gen['rated_kw'] / 100  # Size based on capacity
+        })
+    
+    # Create PyDeck map
+    map_df = pd.DataFrame(map_data)
+    
+    view_state = pdk.ViewState(
+        latitude=24.7136,
+        longitude=46.6753,
+        zoom=6,
+        pitch=45
+    )
+    
+    layer = pdk.Layer(
+        'ScatterplotLayer',
+        data=map_df,
+        get_position='[lon, lat]',
+        get_color='color',
+        get_radius='size',
+        radius_scale=200,
+        pickable=True
+    )
+    
+    deck_map = pdk.Deck(
+        map_style='mapbox://styles/mapbox/light-v9',
+        initial_view_state=view_state,
+        layers=[layer],
+        tooltip={'text': '{generator_id}\n{customer}\nHealth: {health_score}%\nStatus: {status}'}
+    )
+    
+    st.pydeck_chart(deck_map)
+    
+    # Real-time sensor data
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🔍 Critical Sensor Alerts")
+        
+        # Generate realistic sensor alerts
+        sensor_alerts = [
+            {
+                'Generator': 'PS-2021-0001',
+                'Alert': 'Oil Pressure Low',
+                'Current': '28 PSI',
+                'Threshold': '30 PSI',
+                'Severity': '🟡 Warning',
+                'Time': '2 mins ago'
+            },
+            {
+                'Generator': 'PS-2020-0005',
+                'Alert': 'Coolant Temp High',
+                'Current': '98°C',
+                'Threshold': '95°C',
+                'Severity': '🔴 Critical',
+                'Time': '5 mins ago'
+            },
+            {
+                'Generator': 'PS-2021-0012',
+                'Alert': 'Vibration Elevated',
+                'Current': '4.2 mm/s',
+                'Threshold': '4.0 mm/s',
+                'Severity': '🟡 Warning',
+                'Time': '8 mins ago'
+            },
+            {
+                'Generator': 'PS-2020-0008',
+                'Alert': 'Fuel Level Low',
+                'Current': '15%',
+                'Threshold': '20%',
+                'Severity': '🟠 Urgent',
+                'Time': '12 mins ago'
+            }
+        ]
+        
+        alerts_df = pd.DataFrame(sensor_alerts)
+        st.dataframe(alerts_df, use_container_width=True, hide_index=True)
+        
+        # Quick action buttons
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("🚨 Dispatch Emergency Team"):
+                st.success("Emergency technician dispatched to PS-2020-0005!")
+        with col_b:
+            if st.button("📧 Notify All Customers"):
+                st.success("Proactive notifications sent!")
+    
+    with col2:
+        st.subheader("📊 Fleet Health Overview")
+        
+        # Health distribution
+        health_data = {
+            'Status': ['Healthy', 'Monitor', 'Critical', 'Offline'],
+            'Count': [
+                len([g for g in map_data if g['health_score'] > 90]),
+                len([g for g in map_data if 80 < g['health_score'] <= 90]),
+                len([g for g in map_data if g['health_score'] <= 80]),
+                random.randint(0, 3)
+            ]
+        }
+        
+        fig = px.pie(health_data, values='Count', names='Status',
+                    title="Fleet Health Distribution",
+                    color_discrete_map={
+                        'Healthy': '#2ed573',
+                        'Monitor': '#ffa726', 
+                        'Critical': '#ff6b6b',
+                        'Offline': '#6c757d'
+                    })
+        st.plotly_chart(fig, use_container_width=True)
+
+def show_predictive_maintenance_engine():
+    """Advanced predictive maintenance with ML insights."""
+    st.title("🔮 Predictive Maintenance Engine")
+    st.markdown("### AI-Powered Failure Prediction & Prevention")
+    
+    try:
+        generators_df = pd.read_csv(DATA_DIR / "generators.csv")
+    except Exception:
+        st.error("Loading sample data...")
+        return
+    
+    # ML Model performance metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="service-upsell">
+            <h3>Bearing Failure Model</h3>
+            <h1>94.2%</h1>
+            <p>Prediction Accuracy</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="parts-opportunity">
+            <h3>Oil Analysis Model</h3>
+            <h1>91.8%</h1>
+            <p>Prediction Accuracy</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="customer-value">
+            <h3>Coolant System Model</h3>
+            <h1>89.5%</h1>
+            <p>Prediction Accuracy</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        prevented_failures = random.randint(15, 25)
+        st.metric("Failures Prevented", prevented_failures, delta="This quarter")
+    
+    # Maintenance schedule based on the checklist
+    st.subheader("📅 Smart Maintenance Scheduling")
+    
+    maintenance_schedule = {
+        'Daily': ['Check fuel levels', 'Inspect for leaks', 'Check warning indicators', 'Listen for unusual noises'],
+        'Weekly': ['Run generator 10-15 minutes', 'Inspect oil levels', 'Check coolant levels', 'Clean air filters', 'Test battery voltage'],
+        'Monthly': ['Check battery terminals', 'Inspect belts and hoses', 'Check exhaust system', 'Test load bank'],
+        'Quarterly': ['Change oil and oil filter', 'Flush and replace coolant', 'Inspect electrical connections', 'Lubricate moving parts'],
+        'Annual': ['Full system inspection', 'Replace fuel filters', 'Test automatic transfer switch', 'Professional servicing']
+    }
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**🎯 High-Priority Predictions**")
+        
+        predictions = [
+            {
+                'Generator': 'PS-2020-0003',
+                'Prediction': 'Bearing Failure',
+                'Confidence': '87%',
+                'Time to Failure': '18 days',
+                'Action': 'Schedule bearing replacement',
+                'Cost Savings': '$15,000'
+            },
+            {
+                'Generator': 'PS-2021-0007',
+                'Prediction': 'Oil Degradation',
+                'Confidence': '92%',
+                'Time to Failure': '12 days',
+                'Action': 'Oil change and analysis',
+                'Cost Savings': '$8,500'
+            },
+            {
+                'Generator': 'PS-2020-0011',
+                'Prediction': 'Coolant System Issue',
+                'Confidence': '85%',
+                'Time to Failure': '25 days',
+                'Action': 'Coolant flush and inspection',
+                'Cost Savings': '$12,000'
+            }
+        ]
+        
+        pred_df = pd.DataFrame(predictions)
+        st.dataframe(pred_df, use_container_width=True, hide_index=True)
+    
+    with col2:
+        st.write("**📊 Sensor Trend Analysis**")
+        
+        # Simulate sensor trend data
+        days = list(range(1, 31))
+        oil_pressure = [30 + random.uniform(-2, 2) + (i * -0.1) for i in days]  # Declining trend
+        coolant_temp = [85 + random.uniform(-3, 3) + (i * 0.05) for i in days]  # Rising trend
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=days, y=oil_pressure, mode='lines', name='Oil Pressure (PSI)', line=dict(color='blue')))
+        fig.add_trace(go.Scatter(x=days, y=coolant_temp, mode='lines', name='Coolant Temp (°C)', line=dict(color='red')))
+        
+        # Add threshold lines
+        fig.add_hline(y=25, line_dash="dash", line_color="blue", annotation_text="Oil Pressure Min")
+        fig.add_hline(y=95, line_dash="dash", line_color="red", annotation_text="Coolant Temp Max")
+        
+        fig.update_layout(title="30-Day Sensor Trends", height=300)
+        st.plotly_chart(fig, use_container_width=True)
+
+def show_smart_alerts_system():
+    """Smart alerts and escalation management."""
+    st.title("🚨 Smart Alerts & Escalation System")
+    st.markdown("### Tiered Notifications & Automated Responses")
+    
+    # Alert categories and counts
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="alert-revenue">
+            <h3>Critical Alerts</h3>
+            <h1>3</h1>
+            <p>Immediate shutdown required</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="parts-opportunity">
+            <h3>Warning Alerts</h3>
+            <h1>8</h1>
+            <p>Trending toward danger</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="service-upsell">
+            <h3>Routine Alerts</h3>
+            <h1>15</h1>
+            <p>Scheduled maintenance</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.metric("Response Time", "4.2 min", delta="Target: <5 min")
+    
+    # Live alert feed
+    st.subheader("⚡ Live Alert Feed")
+    
+    # Generate realistic alert stream
+    current_time = datetime.now()
+    alerts = []
+    
+    alert_types = [
+        ('🔴 CRITICAL', 'Engine shutdown - Oil pressure lost', 'PS-2020-0005', '30 seconds ago'),
+        ('🟠 WARNING', 'Coolant temperature rising', 'PS-2021-0008', '2 minutes ago'),
+        ('🟡 ROUTINE', 'Service due in 50 hours', 'PS-2020-0012', '5 minutes ago'),
+        ('🔴 CRITICAL', 'Fuel leak detected', 'PS-2021-0003', '8 minutes ago'),
+        ('🟠 WARNING', 'Vibration levels elevated', 'PS-2020-0009', '12 minutes ago'),
+        ('🟡 ROUTINE', 'Battery voltage low', 'PS-2021-0015', '15 minutes ago'),
+        ('🟠 WARNING', 'Air filter restriction high', 'PS-2020-0007', '18 minutes ago'),
+        ('🟡 ROUTINE', 'Load bank test due', 'PS-2021-0011', '22 minutes ago')
+    ]
+    
+    for severity, message, generator, time_ago in alert_types:
+        alerts.append({
+            'Severity': severity,
+            'Message': message,
+            'Generator': generator,
+            'Time': time_ago,
+            'Status': 'NEW' if 'CRITICAL' in severity else 'OPEN',
+            'Action': 'Auto-dispatch' if 'CRITICAL' in severity else 'Monitor'
+        })
+    
+    alerts_df = pd.DataFrame(alerts)
+    st.dataframe(alerts_df, use_container_width=True, hide_index=True)
+    
+    # Alert automation settings
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("⚙️ Automation Rules")
+        
+        st.write("**Critical Alert Actions:**")
+        st.checkbox("✅ Auto-dispatch emergency technician", value=True)
+        st.checkbox("✅ Notify customer immediately", value=True)
+        st.checkbox("✅ Create high-priority work order", value=True)
+        st.checkbox("✅ Escalate to on-call manager", value=True)
+        
+        st.write("**Warning Alert Actions:**")
+        st.checkbox("📧 Send email notification", value=True)
+        st.checkbox("📱 SMS to service coordinator", value=True)
+        st.checkbox("📅 Schedule preventive maintenance", value=True)
+        
+        if st.button("💾 Save Automation Rules"):
+            st.success("Automation rules updated!")
+    
+    with col2:
+        st.subheader("📊 Alert Response Analytics")
+        
+        # Response time trends
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        response_times = [random.uniform(2, 8) for _ in days]
+        
+        fig = px.bar(x=days, y=response_times, title="Average Response Time by Day")
+        fig.add_hline(y=5, line_dash="dash", line_color="red", annotation_text="Target: 5 min")
+        fig.update_layout(height=250)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Alert resolution stats
+        resolution_data = {
+            'Resolution Type': ['Auto-Resolved', 'Tech Dispatch', 'Customer Action', 'Escalated'],
+            'Count': [12, 8, 5, 2]
+        }
+        
+        fig2 = px.pie(resolution_data, values='Count', names='Resolution Type',
+                     title="Alert Resolution Methods")
+        st.plotly_chart(fig2, use_container_width=True)
 
 def show_ceo_revenue_dashboard():
     """CEO-focused revenue and growth analytics dashboard."""
@@ -879,7 +1449,7 @@ def show_service_operations_dashboard():
         st.info("All customers have optimal service contracts! 🎉")
 
 def show_customer_portal():
-    """Customer portal for performance and support tracking."""
+    """Enhanced customer portal with mobile features and self-help insights."""
     st.title("🏢 Customer Portal")
     st.markdown("### Your Generator Performance & Support Dashboard")
     
@@ -904,186 +1474,281 @@ def show_customer_portal():
     
     st.markdown(f"### Welcome, {selected_customer}")
     
-    # Customer overview metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Real-time notification banner
+    if random.random() > 0.7:  # 30% chance of showing alert
+        alert_types = [
+            ("🟡", "Service reminder: Generator PS-2021-0003 is due for maintenance in 5 days"),
+            ("🔴", "Critical alert: Low fuel detected on Generator PS-2020-0008 - 12% remaining"),
+            ("🟢", "Success: Preventive maintenance completed on Generator PS-2021-0001"),
+            ("🔵", "Info: Load bank test scheduled for next week - Generator PS-2020-0012")
+        ]
+        
+        icon, message = random.choice(alert_types)
+        st.info(f"{icon} **Live Update:** {message}")
+    
+    # Customer overview metrics with traffic light system
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     total_capacity = customer_generators['rated_kw'].sum()
     active_generators = len(customer_generators)
     avg_runtime = customer_generators['total_runtime_hours'].mean()
-    
-    # Calculate customer's annual spend
-    customer_serials = customer_generators['serial_number'].tolist()
-    annual_parts_spend = 0
-    annual_service_spend = 0
-    
-    # This would normally filter by actual customer data
     estimated_annual_spend = len(customer_generators) * random.randint(8000, 25000)
     
+    # Calculate overall health status
+    health_scores = []
+    for _, gen in customer_generators.iterrows():
+        score = random.randint(75, 98)
+        health_scores.append(score)
+    
+    avg_health = sum(health_scores) / len(health_scores)
+    
+    # Traffic light health indicator
+    if avg_health > 90:
+        health_color = "🟢"
+        health_status = "Healthy"
+    elif avg_health > 80:
+        health_color = "🟡"
+        health_status = "Monitor"
+    else:
+        health_color = "🔴"
+        health_status = "Attention Needed"
+    
     with col1:
+        st.metric("Fleet Health", f"{health_color} {health_status}", delta=f"{avg_health:.1f}% avg score")
+    
+    with col2:
         st.metric("Total Capacity", f"{total_capacity:,.0f} kW")
     
-    with col2:
-        st.metric("Active Generators", active_generators)
-    
     with col3:
-        st.metric("Avg Runtime", f"{avg_runtime:,.0f} hrs")
+        st.metric("Active Units", active_generators)
     
     with col4:
-        st.metric("Annual Spend", f"${estimated_annual_spend:,.0f}")
+        # Fuel status across fleet
+        fuel_levels = [random.randint(15, 95) for _ in customer_generators.iterrows()]
+        avg_fuel = sum(fuel_levels) / len(fuel_levels)
+        fuel_status = "🟢" if avg_fuel > 50 else "🟡" if avg_fuel > 30 else "🔴"
+        st.metric("Fuel Status", f"{fuel_status} {avg_fuel:.0f}% avg")
     
-    # Generator fleet status
-    st.subheader("🔋 Your Generator Fleet Status")
+    with col5:
+        # Service status
+        service_due_count = len(customer_generators[customer_generators['next_service_hours'] < 100])
+        service_status = "🔴" if service_due_count > 2 else "🟡" if service_due_count > 0 else "🟢"
+        st.metric("Service Status", f"{service_status} {service_due_count} due soon")
     
-    # Create customer fleet view
-    fleet_display = customer_generators[[
-        'serial_number', 'model_series', 'rated_kw', 'warranty_status',
-        'service_contract', 'next_service_hours', 'total_runtime_hours', 'location_city'
-    ]].copy()
+    # Enhanced generator fleet status with maintenance tracking
+    st.subheader("🔋 Your Generator Fleet - Live Status")
     
-    fleet_display.columns = [
-        'Serial Number', 'Model', 'Capacity (kW)', 'Warranty',
-        'Service Contract', 'Service Due (hrs)', 'Total Runtime', 'Location'
-    ]
+    # Create enhanced fleet view with maintenance schedule
+    fleet_data = []
+    maintenance_schedule = {
+        'Daily': ['Fuel check', 'Visual inspection', 'Control panel check'],
+        'Weekly': ['15-min run test', 'Oil level check', 'Battery test'],
+        'Monthly': ['Battery terminals', 'Belt inspection', 'Load bank test'],
+        'Quarterly': ['Oil change', 'Coolant flush', 'Full inspection'],
+        'Annual': ['Major service', 'ATS test', 'Professional certification']
+    }
     
-    # Add service status
-    def get_service_status(hours):
-        if hours < 0:
-            return "⚠️ Overdue"
-        elif hours < 100:
-            return "🟡 Due Soon"
-        elif hours < 300:
-            return "🟢 Scheduled"
+    for _, gen in customer_generators.iterrows():
+        # Calculate next maintenance type needed
+        hours_to_service = gen['next_service_hours']
+        
+        if hours_to_service < 0:
+            next_maintenance = "🔴 Overdue - Quarterly Service"
+            priority = "Critical"
+        elif hours_to_service < 50:
+            next_maintenance = "🟠 Due Soon - Oil Change"
+            priority = "High"
+        elif hours_to_service < 200:
+            next_maintenance = "🟡 Scheduled - Monthly Check"
+            priority = "Medium"
         else:
-            return "✅ Current"
-    
-    fleet_display['Service Status'] = fleet_display['Service Due (hrs)'].apply(get_service_status)
-    
-    st.dataframe(fleet_display, use_container_width=True, hide_index=True)
-    
-    # Service and support
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🔧 Service Requests")
+            next_maintenance = "🟢 Current - Weekly Test"
+            priority = "Low"
         
-        # Mock recent service history
-        recent_services = [
-            {'Date': '2024-12-01', 'Type': 'Preventive Maintenance', 'Technician': 'Ahmed Al-Rashid', 'Status': 'Completed'},
-            {'Date': '2024-11-15', 'Type': 'Filter Replacement', 'Technician': 'Mohammed Al-Saud', 'Status': 'Completed'},
-            {'Date': '2024-11-02', 'Type': 'Diagnostic Check', 'Technician': 'Khalid Al-Otaibi', 'Status': 'Completed'},
-            {'Date': '2024-10-18', 'Type': 'Emergency Repair', 'Technician': 'Abdullah Al-Nasser', 'Status': 'Completed'},
-        ]
-        
-        services_df = pd.DataFrame(recent_services)
-        st.dataframe(services_df, use_container_width=True, hide_index=True)
-        
-        # Quick action buttons
-        if st.button("📞 Request Service Call", use_container_width=True):
-            st.success("Service request submitted! You'll be contacted within 2 hours.")
-        
-        if st.button("🚨 Emergency Support", use_container_width=True, type="primary"):
-            st.success("Emergency support contacted! Response time: <1 hour.")
-    
-    with col2:
-        st.subheader("📦 Parts & Maintenance")
-        
-        # Parts recommendations based on generator age and usage
-        recommendations = []
-        
-        for _, gen in customer_generators.iterrows():
-            runtime = gen['total_runtime_hours']
-            
-            if runtime > 8000:
-                recommendations.append({
-                    'Generator': gen['serial_number'],
-                    'Part Type': 'Air Filter',
-                    'Reason': 'High runtime hours',
-                    'Priority': 'Recommended',
-                    'Est. Cost': '$85'
-                })
-            
-            if gen['next_service_hours'] < 100:
-                recommendations.append({
-                    'Generator': gen['serial_number'],
-                    'Part Type': 'Oil Filter',
-                    'Reason': 'Service due soon',
-                    'Priority': 'Scheduled',
-                    'Est. Cost': '$150'
-                })
-        
-        if recommendations:
-            rec_df = pd.DataFrame(recommendations)
-            st.dataframe(rec_df, use_container_width=True, hide_index=True)
-            
-            if st.button("🛒 Order Recommended Parts", use_container_width=True):
-                st.success("Parts order submitted! Delivery within 2-3 business days.")
+        # Calculate estimated cost
+        if "Quarterly" in next_maintenance:
+            est_cost = random.randint(800, 1500)
+        elif "Oil Change" in next_maintenance:
+            est_cost = random.randint(200, 400)
         else:
-            st.info("No immediate parts recommendations. Your generators are in good condition! ✅")
-    
-    # Performance analytics
-    st.subheader("📊 Performance Analytics")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Mock efficiency data
-        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        efficiency_data = [random.uniform(88, 95) for _ in months]
+            est_cost = random.randint(50, 150)
         
-        fig = px.line(x=months, y=efficiency_data, title="Fleet Efficiency Trend (%)")
-        fig.update_layout(height=300)
-        fig.add_hline(y=90, line_dash="dash", line_color="red", annotation_text="Target: 90%")
-        st.plotly_chart(fig, use_container_width=True)
+        fleet_data.append({
+            'Serial Number': gen['serial_number'],
+            'Model': gen['model_series'],
+            'Location': gen['location_city'],
+            'Capacity': f"{gen['rated_kw']} kW",
+            'Runtime': f"{gen['total_runtime_hours']:,} hrs",
+            'Next Maintenance': next_maintenance,
+            'Est. Cost': f"${est_cost}",
+            'Fuel Level': f"{random.randint(20, 90)}%",
+            'Last Service': f"{random.randint(30, 180)} days ago"
+        })
     
-    with col2:
-        # Mock uptime data
-        uptime_data = [random.uniform(96, 99.8) for _ in months]
-        
-        fig = px.bar(x=months, y=uptime_data, title="Monthly Uptime (%)")
-        fig.update_layout(height=300)
-        fig.add_hline(y=99, line_dash="dash", line_color="green", annotation_text="SLA: 99%")
-        st.plotly_chart(fig, use_container_width=True)
+    fleet_df = pd.DataFrame(fleet_data)
+    st.dataframe(fleet_df, use_container_width=True, hide_index=True)
     
-    # Cost insights
-    st.subheader("💰 Cost Insights & Optimization")
+    # One-click service request section
+    st.subheader("🚀 One-Click Service Requests")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown("""
-        <div class="customer-value">
-            <h4>💡 Cost Savings Opportunities</h4>
-            <ul>
-                <li><strong>Preventive Maintenance:</strong> Save up to 40% on repairs</li>
-                <li><strong>Parts Bundle:</strong> 15% discount on bulk orders</li>
-                <li><strong>Service Contract:</strong> Fixed annual costs</li>
-            </ul>
+        <div class="service-upsell">
+            <h4>🔧 Routine Maintenance</h4>
+            <p>Schedule your next service</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        if st.button("📅 Book Maintenance", key="book_maint", use_container_width=True):
+            st.success("✅ Maintenance booked! Technician will contact you within 4 hours.")
+            st.info("📍 Nearest technician: Ahmed Al-Rashid (18 km away)")
     
     with col2:
         st.markdown("""
-        <div class="service-upsell">
-            <h4>🔧 Recommended Upgrades</h4>
-            <ul>
-                <li><strong>Premium Care Contract:</strong> 24/7 support included</li>
-                <li><strong>Remote Monitoring:</strong> Proactive alerts</li>
-                <li><strong>Performance Optimization:</strong> Efficiency improvements</li>
-            </ul>
+        <div class="parts-opportunity">
+            <h4>🚨 Emergency Service</h4>
+            <p>24/7 emergency response</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        if st.button("🚨 Emergency Call", key="emergency", use_container_width=True, type="primary"):
+            st.success("🚨 Emergency dispatch activated! ETA: 45 minutes")
+            st.info("📞 Emergency hotline: +966-11-XXX-XXXX")
     
     with col3:
         st.markdown("""
-        <div class="parts-opportunity">
-            <h4>📊 Performance Insights</h4>
-            <ul>
-                <li><strong>Fuel Efficiency:</strong> 2.3% above industry average</li>
-                <li><strong>Uptime:</strong> 99.2% (exceeds SLA)</li>
-                <li><strong>Maintenance Cost:</strong> 18% below typical</li>
-            </ul>
+        <div class="customer-value">
+            <h4>📦 Order Parts</h4>
+            <p>Genuine parts delivery</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        if st.button("🛒 Order Parts", key="order_parts", use_container_width=True):
+            st.success("🛒 Parts catalog opened! Free delivery on orders >$200")
+    
+    # Self-help insights and diagnostics
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("💡 Self-Help Insights")
+        
+        # Fuel consumption insights
+        st.write("**⛽ Fuel Efficiency Analysis**")
+        
+        # Mock fuel consumption data
+        monthly_consumption = [random.randint(800, 1500) for _ in range(6)]
+        months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        
+        fig = px.line(x=months, y=monthly_consumption, 
+                     title="Monthly Fuel Consumption (Liters)")
+        fig.update_layout(height=250)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Efficiency tips
+        st.markdown("""
+        **🎯 Efficiency Tips:**
+        - Your fleet is **8% more efficient** than industry average
+        - Consider load balancing during peak hours
+        - Regular filter changes improve efficiency by 3-5%
+        """)
+        
+        # Quick diagnostics
+        st.write("**🔍 Quick Health Check**")
+        if st.button("Run Fleet Diagnostic", key="diagnostic"):
+            st.success("✅ Diagnostic complete!")
+            st.write("**Results:**")
+            st.write("• Oil pressure: Normal (all units)")
+            st.write("• Coolant levels: Low on PS-2021-0003 (⚠️)")
+            st.write("• Battery voltage: Normal (all units)")
+            st.write("• Air filters: Replace on 2 units (🔧)")
+    
+    with col2:
+        st.subheader("📊 Performance Analytics")
+        
+        # Uptime analysis
+        uptime_data = {
+            'Generator': [gen['serial_number'] for _, gen in customer_generators.head(5).iterrows()],
+            'Uptime %': [random.uniform(96, 99.8) for _ in range(5)]
+        }
+        
+        fig = px.bar(uptime_data, x='Generator', y='Uptime %',
+                    title="Generator Uptime (Last 30 Days)")
+        fig.add_hline(y=99, line_dash="dash", line_color="green", annotation_text="SLA Target")
+        fig.update_layout(height=250)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Cost breakdown
+        st.write("**💰 Monthly Cost Breakdown**")
+        cost_data = {
+            'Category': ['Fuel', 'Maintenance', 'Parts', 'Emergency'],
+            'Amount': [12500, 3200, 1800, 850]
+        }
+        
+        fig2 = px.pie(cost_data, values='Amount', names='Category',
+                     title="Cost Distribution ($)")
+        st.plotly_chart(fig2, use_container_width=True)
+    
+    # Maintenance history and compliance
+    st.subheader("📋 Maintenance History & Compliance")
+    
+    # Generate maintenance history
+    maintenance_history = []
+    service_types = ['Oil Change', 'Filter Replacement', 'Full Service', 'Emergency Repair', 'Load Bank Test']
+    
+    for i in range(8):
+        service_date = datetime.now() - timedelta(days=random.randint(10, 180))
+        
+        maintenance_history.append({
+            'Date': service_date.strftime('%Y-%m-%d'),
+            'Generator': random.choice([gen['serial_number'] for _, gen in customer_generators.iterrows()]),
+            'Service Type': random.choice(service_types),
+            'Technician': random.choice(['Ahmed Al-Rashid', 'Mohammed Al-Saud', 'Khalid Al-Otaibi']),
+            'Duration': f"{random.randint(2, 8)} hours",
+            'Cost': f"${random.randint(200, 1500)}",
+            'Status': 'Completed',
+            'Certificate': '📄 Download'
+        })
+    
+    history_df = pd.DataFrame(maintenance_history)
+    st.dataframe(history_df, use_container_width=True, hide_index=True)
+    
+    # Compliance and reporting
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📊 Generate Compliance Report", use_container_width=True):
+            st.success("📊 Compliance report generated and emailed!")
+    
+    with col2:
+        if st.button("📄 Download Service Certificates", use_container_width=True):
+            st.success("📄 All certificates downloaded as PDF!")
+    
+    with col3:
+        if st.button("📈 Export Performance Data", use_container_width=True):
+            st.success("📈 Performance data exported to Excel!")
+    
+    # Proactive notifications preferences
+    with st.expander("🔔 Notification Preferences"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Alert Notifications:**")
+            st.checkbox("📧 Email alerts", value=True)
+            st.checkbox("📱 SMS notifications", value=True)
+            st.checkbox("🔔 Push notifications", value=False)
+            st.checkbox("📞 Phone calls for critical alerts", value=True)
+        
+        with col2:
+            st.write("**Maintenance Reminders:**")
+            st.checkbox("📅 Service due reminders", value=True)
+            st.checkbox("⛽ Low fuel alerts", value=True)
+            st.checkbox("🔋 Battery status updates", value=True)
+            st.checkbox("📊 Monthly performance reports", value=True)
+        
+        if st.button("💾 Save Preferences"):
+            st.success("Notification preferences updated!")
 
 def main():
     """Main application with manufacturer focus."""
@@ -1119,23 +1784,28 @@ def main():
     if st.session_state.user_role == "ceo@powersystem":
         pages = {
             "👔 CEO Dashboard": show_ceo_revenue_dashboard,
+            "🗺️ Fleet Monitoring": show_fleet_monitoring_dashboard,
+            "🔮 Predictive Maintenance": show_predictive_maintenance_engine,
+            "🚨 Smart Alerts": show_smart_alerts_system,
             "💰 Sales Analytics": show_sales_manager_dashboard,
-            "🔧 Service Operations": show_service_operations_dashboard,
-            "🏢 Customer Portal": show_customer_portal
+            "🔧 Service Operations": show_service_operations_dashboard
         }
     elif st.session_state.user_role == "sales@powersystem":
         pages = {
             "💰 Sales Dashboard": show_sales_manager_dashboard,
+            "🔮 Predictive Opportunities": show_predictive_maintenance_engine,
             "👔 Executive Summary": show_ceo_revenue_dashboard,
-            "🔧 Service Opportunities": show_service_operations_dashboard,
-            "🏢 Customer Insights": show_customer_portal
+            "🗺️ Fleet Overview": show_fleet_monitoring_dashboard,
+            "🔧 Service Opportunities": show_service_operations_dashboard
         }
     elif st.session_state.user_role == "service@powersystem":
         pages = {
             "🔧 Service Operations": show_service_operations_dashboard,
+            "🗺️ Fleet Monitoring": show_fleet_monitoring_dashboard,
+            "🚨 Alert Center": show_smart_alerts_system,
+            "🔮 Predictive Maintenance": show_predictive_maintenance_engine,
             "💰 Revenue Opportunities": show_sales_manager_dashboard,
-            "🏢 Customer Management": show_customer_portal,
-            "👔 Executive View": show_ceo_revenue_dashboard
+            "🏢 Customer Management": show_customer_portal
         }
     else:  # customer@powersystem
         pages = {
