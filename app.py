@@ -373,10 +373,11 @@ def show_work_management_dashboard():
         # Key metrics
         col1, col2, col3, col4, col5 = st.columns(5)
         
-        # Calculate metrics
+        # Calculate metrics with enhanced service tracking
         total_opportunities = len(status_df[status_df['revenue_opportunity'] == True])
         fault_count = len(status_df[status_df['operational_status'] == 'FAULT'])
         service_due = len(status_df[status_df['needs_proactive_contact'] == True])
+        overdue_service = len(status_df[status_df['next_service_hours'] < 0])
         potential_revenue = total_opportunities * CONFIG['revenue_targets']['service_revenue_per_ticket']
         
         with col1:
@@ -389,11 +390,13 @@ def show_work_management_dashboard():
             """, unsafe_allow_html=True)
         
         with col2:
+            service_color = "service-due-card" if service_due > 0 else "revenue-opportunity"
             st.markdown(f"""
-            <div class="service-due-card">
+            <div class="{service_color}">
                 <h4>⏰ Service Due</h4>
                 <h2>{service_due}</h2>
                 <p>Proactive notifications</p>
+                {"<p style='font-size:12px;'>⚠️ " + str(overdue_service) + " overdue</p>" if overdue_service > 0 else ""}
             </div>
             """, unsafe_allow_html=True)
         
@@ -441,27 +444,58 @@ def show_work_management_dashboard():
             </div>
             """, unsafe_allow_html=True)
             
-            # Create ticket data
+            # Create enhanced ticket data with service details
             tickets = []
             for _, opportunity in proactive_opportunities.iterrows():
                 if opportunity['operational_status'] == 'FAULT':
                     ticket_type = "🚨 FAULT RESPONSE"
                     priority = "CRITICAL"
-                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5  # Premium for emergency
+                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
                     action = "Contact immediately - Emergency service"
-                else:
-                    ticket_type = "📅 PREVENTIVE SERVICE"
+                    service_detail = opportunity['fault_description']
+                elif opportunity['next_service_hours'] < 0:
+                    ticket_type = "🔴 OVERDUE SERVICE"
+                    priority = "HIGH"
+                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.2
+                    action = "Contact immediately - Service overdue"
+                    days_overdue = abs(opportunity['next_service_hours']) // 24
+                    service_detail = f"Service overdue by {days_overdue} days"
+                elif opportunity['next_service_hours'] < 48:
+                    ticket_type = "🟠 URGENT SERVICE"
                     priority = "HIGH"
                     estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
+                    action = "Schedule within 24 hours"
+                    service_detail = f"Service due in {opportunity['next_service_hours']} hours"
+                else:
+                    ticket_type = "📅 PREVENTIVE SERVICE"
+                    priority = "MEDIUM"
+                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
                     action = "Schedule within 72 hours"
+                    service_detail = f"Service due in {opportunity['next_service_hours']} hours"
+                
+                # Add parts recommendations based on service type and runtime
+                runtime = opportunity.get('runtime_hours', 5000)
+                parts_needed = []
+                
+                if runtime > 8000:
+                    parts_needed.extend(["Oil Filter", "Oil", "Air Filter"])
+                    estimated_revenue += 150  # Parts revenue
+                
+                if opportunity['next_service_hours'] < 0:  # Overdue service
+                    parts_needed.extend(["Belt Kit", "Coolant"])
+                    estimated_revenue += 200  # Additional parts for overdue service
+                
+                parts_list = ", ".join(parts_needed) if parts_needed else "TBD"
                 
                 tickets.append({
                     'Ticket ID': f"TK-{random.randint(10000, 99999)}",
                     'Type': ticket_type,
                     'Generator': opportunity['serial_number'],
-                    'Customer': opportunity['customer_name'][:25] + "...",
+                    'Customer': opportunity['customer_name'][:20] + "...",
                     'Contact': opportunity['customer_contact'],
-                    'Issue': opportunity['fault_description'] if opportunity['fault_description'] else f"Service due in {opportunity['next_service_hours']} hours",
+                    'Service Detail': service_detail,
+                    'Runtime Hours': f"{runtime:,} hrs",
+                    'Parts Needed': parts_list,
                     'Priority': priority,
                     'Est. Revenue': f"${estimated_revenue:,.0f}",
                     'Action Required': action
@@ -498,15 +532,57 @@ def show_work_management_dashboard():
         else:
             st.success("✅ No immediate proactive notifications required - All generators operating normally!")
         
-        # Fleet status overview
-        st.subheader("🗺️ Fleet Status Overview")
-        
-        # Status summary
-        status_summary = status_df['operational_status'].value_counts()
+        # Service Schedule Overview
+        st.subheader("📅 Service Schedule Overview")
         
         col1, col2 = st.columns(2)
         
         with col1:
+            st.write("**🔧 Service Categories:**")
+            
+            # Service breakdown
+            service_breakdown = []
+            overdue_count = len(status_df[status_df['next_service_hours'] < 0])
+            urgent_count = len(status_df[(status_df['next_service_hours'] >= 0) & (status_df['next_service_hours'] < 48)])
+            due_soon_count = len(status_df[(status_df['next_service_hours'] >= 48) & (status_df['next_service_hours'] < 168)])
+            scheduled_count = len(status_df[status_df['next_service_hours'] >= 168])
+            
+            service_breakdown = [
+                {"Category": "🔴 Overdue Service", "Count": overdue_count, "Revenue": f"${overdue_count * 1020:,.0f}"},
+                {"Category": "🟠 Urgent (< 48hrs)", "Count": urgent_count, "Revenue": f"${urgent_count * 850:,.0f}"},
+                {"Category": "🟡 Due Soon (1 week)", "Count": due_soon_count, "Revenue": f"${due_soon_count * 850:,.0f}"},
+                {"Category": "🟢 Scheduled", "Count": scheduled_count, "Revenue": f"${scheduled_count * 720:,.0f}"}
+            ]
+            
+            service_df = pd.DataFrame(service_breakdown)
+            st.dataframe(service_df, use_container_width=True, hide_index=True)
+        
+        with col2:
+            st.write("**🛠️ Service Type Distribution:**")
+            
+            # Create service type breakdown
+            high_runtime = len(status_df[status_df.get('runtime_hours', 5000) > 8000])
+            medium_runtime = len(status_df[(status_df.get('runtime_hours', 5000) >= 5000) & (status_df.get('runtime_hours', 5000) <= 8000)])
+            low_runtime = len(status_df[status_df.get('runtime_hours', 5000) < 5000])
+            
+            service_types = [
+                {"Service Type": "🔧 Major Service", "Units": high_runtime, "Est. Cost": "$1,200/unit"},
+                {"Service Type": "⚙️ Standard Service", "Units": medium_runtime, "Est. Cost": "$850/unit"},
+                {"Service Type": "🧹 Basic Service", "Units": low_runtime, "Est. Cost": "$450/unit"}
+            ]
+            
+            service_types_df = pd.DataFrame(service_types)
+            st.dataframe(service_types_df, use_container_width=True, hide_index=True)
+        
+        # Fleet status overview
+        st.subheader("🗺️ Fleet Status Overview")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Status summary
+            status_summary = status_df['operational_status'].value_counts()
+            
             fig = px.pie(
                 values=status_summary.values, 
                 names=status_summary.index,
@@ -524,19 +600,51 @@ def show_work_management_dashboard():
             # Revenue opportunities by customer
             revenue_by_customer = status_df[status_df['revenue_opportunity'] == True].groupby('customer_name').size().reset_index()
             revenue_by_customer.columns = ['Customer', 'Opportunities']
-            revenue_by_customer = revenue_by_customer.sort_values('Opportunities', ascending=False).head(10)
+            revenue_by_customer = revenue_by_customer.sort_values('Opportunities', ascending=False).head(8)
             
             if not revenue_by_customer.empty:
                 fig2 = px.bar(
                     revenue_by_customer, 
                     x='Opportunities', 
                     y='Customer',
-                    title="Top Revenue Opportunities by Customer",
+                    title="Revenue Opportunities by Customer",
                     orientation='h'
                 )
+                fig2.update_layout(height=400)
                 st.plotly_chart(fig2, use_container_width=True)
             else:
                 st.info("No current revenue opportunities identified")
+        
+        with col3:
+            # Technician assignment and parts status
+            st.write("**👷 Technician Assignment:**")
+            
+            # Mock technician data
+            total_tickets = len(proactive_opportunities) if 'proactive_opportunities' in locals() else 0
+            technicians = [
+                {"Name": "Ahmed Al-Rashid", "Region": "Riyadh", "Assigned": min(6, total_tickets//3), "Available": "✅"},
+                {"Name": "Mohammed Al-Saud", "Region": "Jeddah", "Assigned": min(4, total_tickets//4), "Available": "✅"},
+                {"Name": "Khalid Al-Otaibi", "Region": "Eastern", "Assigned": min(5, total_tickets//3), "Available": "🟡"},
+                {"Name": "Abdullah Al-Nasser", "Region": "NEOM", "Assigned": min(2, total_tickets//5), "Available": "✅"}
+            ]
+            
+            tech_df = pd.DataFrame(technicians)
+            st.dataframe(tech_df, use_container_width=True, hide_index=True)
+            
+            st.write("**📦 Critical Parts Status:**")
+            
+            parts_status = [
+                {"Part": "Oil Filters", "Stock": 45, "Status": "✅"},
+                {"Part": "Air Filters", "Stock": 12, "Status": "🟡"},
+                {"Part": "Belt Kits", "Stock": 8, "Status": "🔴"},
+                {"Part": "Oil (20L)", "Stock": 28, "Status": "✅"}
+            ]
+            
+            parts_df = pd.DataFrame(parts_status)
+            st.dataframe(parts_df, use_container_width=True, hide_index=True)
+            
+            if st.button("📋 Generate Purchase Order", use_container_width=True):
+                st.success("PO generated for low-stock items!")
     
     except Exception as e:
         st.error(f"Error loading work management dashboard: {str(e)}")
