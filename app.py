@@ -109,7 +109,7 @@ CONFIG = {
     "company_name": "Power System Manufacturing",
     "refresh_interval": 30,
     "cache_ttl": 300,
-    "proactive_notification_hours": 72,  # Hours in advance to notify
+    "proactive_notification_hours": 72,
     "revenue_targets": {
         "service_revenue_per_ticket": 850,
         "parts_revenue_per_ticket": 450
@@ -245,6 +245,102 @@ def _generate_enhanced_generator_data() -> Dict:
     }
 
 @st.cache_data(ttl=60)  # Update every minute for real-time feel
+def generate_real_time_status(generators_df: pd.DataFrame) -> pd.DataFrame:
+    """Generate real-time operational status and sensor data."""
+    seed = int(time.time() // 60)  # Changes every minute
+    np.random.seed(seed)
+    
+    status_data = []
+    for _, gen in generators_df.iterrows():
+        try:
+            # Operational status logic
+            oil_pressure = np.random.uniform(20, 35)
+            coolant_temp = np.random.uniform(75, 110)
+            vibration = np.random.uniform(1.0, 6.0)
+            fuel_level = np.random.uniform(10, 95)
+            load_percent = np.random.uniform(0, 100)
+            
+            # Determine operational status
+            has_fault = (oil_pressure < 25 or coolant_temp > 105 or vibration > 5.0 or fuel_level < 15)
+            is_needed = np.random.choice([True, False], p=[0.7, 0.3])  # 70% chance generator is needed
+            
+            if has_fault:
+                operational_status = "FAULT"
+                status_color = "fault"
+                fault_description = []
+                if oil_pressure < 25: fault_description.append("Low oil pressure")
+                if coolant_temp > 105: fault_description.append("High coolant temperature")
+                if vibration > 5.0: fault_description.append("High vibration")
+                if fuel_level < 15: fault_description.append("Low fuel")
+                fault_desc = ", ".join(fault_description)
+            elif is_needed and fuel_level > 20:
+                operational_status = "RUNNING"
+                status_color = "running"
+                fault_desc = ""
+            elif not is_needed:
+                operational_status = "STANDBY"
+                status_color = "standby"
+                fault_desc = "Not required - standby mode"
+            else:
+                operational_status = "MAINTENANCE"
+                status_color = "maintenance"
+                fault_desc = "Scheduled maintenance"
+            
+            # Calculate next service notification with more variety
+            service_hours = gen.get('next_service_hours', 500)  # Default to 500 if missing
+            runtime_hours = gen.get('total_runtime_hours', 5000)
+            
+            # Different service types based on runtime and schedule
+            if runtime_hours > 10000:  # High usage generators need more frequent service
+                service_hours = max(-50, service_hours - 200)  # More likely to need service
+            elif runtime_hours < 3000:  # Low usage generators
+                service_hours = min(1000, service_hours + 300)  # Less frequent service needed
+            
+            # Create varied service needs
+            needs_proactive_contact = False
+            service_type = "Regular Maintenance"
+            
+            if service_hours < 0:
+                needs_proactive_contact = True
+                service_type = "Overdue Maintenance"
+            elif service_hours < 48:  # Due within 48 hours
+                needs_proactive_contact = True
+                service_type = "Urgent Service Due"
+            elif service_hours < CONFIG["proactive_notification_hours"]:  # Due within 72 hours
+                needs_proactive_contact = True
+                service_type = "Scheduled Service Due"
+            elif service_hours < 168:  # Due within 1 week
+                needs_proactive_contact = np.random.choice([True, False], p=[0.3, 0.7])  # 30% chance
+                service_type = "Upcoming Service"
+            
+            # Get customer contact with fallback
+            customer_contact = gen.get('customer_contact', 'contact@customer.sa')
+            
+            status_data.append({
+                'serial_number': gen['serial_number'],
+                'customer_name': gen['customer_name'],
+                'customer_contact': customer_contact,
+                'operational_status': operational_status,
+                'status_color': status_color,
+                'fault_description': fault_desc,
+                'oil_pressure': round(oil_pressure, 1),
+                'coolant_temp': round(coolant_temp, 1),
+                'vibration': round(vibration, 2),
+                'fuel_level': round(fuel_level, 1),
+                'load_percent': round(load_percent, 1),
+                'next_service_hours': service_hours,
+                'service_type': service_type,
+                'runtime_hours': runtime_hours,
+                'needs_proactive_contact': needs_proactive_contact,
+                'revenue_opportunity': has_fault or needs_proactive_contact
+            })
+        except Exception as e:
+            # Skip problematic rows and continue
+            continue
+    
+    return pd.DataFrame(status_data)
+
+@st.cache_data(ttl=60)  # Update every minute for real-time feel
 def generate_interval_service_data(generators_df: pd.DataFrame) -> pd.DataFrame:
     """Generate realistic interval-based service scheduling data."""
     seed = int(time.time() // 60)
@@ -287,15 +383,27 @@ def generate_interval_service_data(generators_df: pd.DataFrame) -> pd.DataFrame:
             
             for service_key, service_info in service_types.items():
                 interval = service_info['interval']
+                
+                # Calculate hours since last service (simulate)
                 hours_since_service = runtime_hours % interval
                 hours_to_next_service = interval - hours_since_service
                 
                 # Calculate notification threshold (5% before interval)
                 notification_threshold = interval * 0.05
                 
-                # Add some variation - some might be overdue
-                if np.random.random() < 0.1:  # 10% chance of being overdue
-                    hours_to_next_service = -random.randint(10, 200)
+                # Force some services to be due for demonstration purposes
+                # Make 30% of generators due for service
+                if np.random.random() < 0.3:
+                    if service_key == 'minor':
+                        hours_to_next_service = random.randint(-50, 20)  # Some overdue, some due soon
+                    elif service_key == 'intermediate':
+                        hours_to_next_service = random.randint(-100, 50)
+                    elif service_key == 'major':
+                        hours_to_next_service = random.randint(-200, 100)
+                
+                # Additional overdue services for demonstration
+                if np.random.random() < 0.15:  # 15% chance of being overdue
+                    hours_to_next_service = -random.randint(10, 300)
                 
                 services_due.append({
                     'service_type': service_key,
@@ -368,76 +476,6 @@ def generate_interval_service_data(generators_df: pd.DataFrame) -> pd.DataFrame:
             continue
     
     return pd.DataFrame(interval_data)
-def generate_real_time_status(generators_df: pd.DataFrame) -> pd.DataFrame:
-    """Generate real-time operational status and sensor data."""
-    seed = int(time.time() // 60)  # Changes every minute
-    np.random.seed(seed)
-    
-    status_data = []
-    for _, gen in generators_df.iterrows():
-        try:
-            # Operational status logic
-            oil_pressure = np.random.uniform(20, 35)
-            coolant_temp = np.random.uniform(75, 110)
-            vibration = np.random.uniform(1.0, 6.0)
-            fuel_level = np.random.uniform(10, 95)
-            load_percent = np.random.uniform(0, 100)
-            
-            # Determine operational status
-            has_fault = (oil_pressure < 25 or coolant_temp > 105 or vibration > 5.0 or fuel_level < 15)
-            is_needed = np.random.choice([True, False], p=[0.7, 0.3])  # 70% chance generator is needed
-            
-            if has_fault:
-                operational_status = "FAULT"
-                status_color = "fault"
-                fault_description = []
-                if oil_pressure < 25: fault_description.append("Low oil pressure")
-                if coolant_temp > 105: fault_description.append("High coolant temperature")
-                if vibration > 5.0: fault_description.append("High vibration")
-                if fuel_level < 15: fault_description.append("Low fuel")
-                fault_desc = ", ".join(fault_description)
-            elif is_needed and fuel_level > 20:
-                operational_status = "RUNNING"
-                status_color = "running"
-                fault_desc = ""
-            elif not is_needed:
-                operational_status = "STANDBY"
-                status_color = "standby"
-                fault_desc = "Not required - standby mode"
-            else:
-                operational_status = "MAINTENANCE"
-                status_color = "maintenance"
-                fault_desc = "Scheduled maintenance"
-            
-            # Calculate next service notification
-            service_hours = gen.get('next_service_hours', 500)  # Default to 500 if missing
-            needs_proactive_contact = service_hours < CONFIG["proactive_notification_hours"] and service_hours > 0
-            
-            # Get customer contact with fallback
-            customer_contact = gen.get('customer_contact', 'contact@customer.sa')
-            
-            status_data.append({
-                'serial_number': gen['serial_number'],
-                'customer_name': gen['customer_name'],
-                'customer_contact': customer_contact,
-                'operational_status': operational_status,
-                'status_color': status_color,
-                'fault_description': fault_desc,
-                'oil_pressure': round(oil_pressure, 1),
-                'coolant_temp': round(coolant_temp, 1),
-                'vibration': round(vibration, 2),
-                'fuel_level': round(fuel_level, 1),
-                'load_percent': round(load_percent, 1),
-                'next_service_hours': service_hours,
-                'needs_proactive_contact': needs_proactive_contact,
-                'revenue_opportunity': has_fault or needs_proactive_contact
-            })
-        except Exception as e:
-            # Skip problematic rows and continue
-            st.error(f"Error processing generator {gen.get('serial_number', 'Unknown')}: {str(e)}")
-            continue
-    
-    return pd.DataFrame(status_data)
 
 # ========================================
 # AUTHENTICATION
@@ -485,24 +523,47 @@ def show_work_management_dashboard():
     st.markdown("### Proactive Service Scheduling & Revenue Optimization")
     
     try:
-        # Load data
+        # Load data first
         generators_df = load_base_generator_data()
-        status_df = generate_real_time_status(generators_df)
-        interval_service_df = generate_interval_service_data(generators_df)
-        
-        if generators_df.empty or status_df.empty:
+        if generators_df.empty:
             st.error("No generator data available. Please check data initialization.")
             return
+            
+        status_df = generate_real_time_status(generators_df)
+        if status_df.empty:
+            st.error("No status data available. Please check data generation.")
+            return
+            
+        interval_service_df = generate_interval_service_data(generators_df)
         
-        # Key metrics
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        # Calculate metrics with enhanced service tracking
-        total_opportunities = len(status_df[status_df['revenue_opportunity'] == True])
+        # Calculate all metrics at the beginning
+        # Basic counts
+        total_generators = len(generators_df)
+        running_count = len(status_df[status_df['operational_status'] == 'RUNNING'])
         fault_count = len(status_df[status_df['operational_status'] == 'FAULT'])
-        service_due = len(status_df[status_df['needs_proactive_contact'] == True])
-        overdue_service = len(status_df[status_df['next_service_hours'] < 0])
-        potential_revenue = total_opportunities * CONFIG['revenue_targets']['service_revenue_per_ticket']
+        
+        # Opportunity calculations
+        fault_opportunities = len(status_df[status_df['revenue_opportunity'] == True])
+        
+        if interval_service_df.empty:
+            interval_opportunities = 0
+            service_due_count = 0
+            overdue_service = 0
+            interval_revenue = 0
+        else:
+            interval_opportunities = len(interval_service_df[interval_service_df['needs_contact'] == True])
+            service_due_count = interval_opportunities
+            overdue_service = len(interval_service_df[interval_service_df['service_status'] == 'OVERDUE'])
+            interval_revenue = interval_service_df[interval_service_df['needs_contact'] == True]['estimated_cost'].sum()
+        
+        total_opportunities = fault_opportunities + interval_opportunities
+        
+        # Revenue calculations
+        fault_revenue = fault_opportunities * CONFIG['revenue_targets']['service_revenue_per_ticket']
+        potential_revenue = fault_revenue + interval_revenue
+        
+        # Key metrics display
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             st.markdown(f"""
@@ -510,7 +571,7 @@ def show_work_management_dashboard():
                 <h4>🎫 Active Tickets</h4>
                 <h2>{total_opportunities}</h2>
                 <p>Revenue opportunities</p>
-                <p style='font-size:12px;'>🚨 {fault_opportunities_count} faults | ⏰ {interval_opportunities_count} intervals</p>
+                <p style='font-size:12px;'>🚨 {fault_opportunities} faults | ⏰ {interval_opportunities} intervals</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -545,751 +606,229 @@ def show_work_management_dashboard():
             """, unsafe_allow_html=True)
         
         with col5:
-            running_count = len(status_df[status_df['operational_status'] == 'RUNNING'])
             st.markdown(f"""
             <div class="revenue-opportunity">
                 <h4>⚡ Generators Running</h4>
                 <h2>{running_count}</h2>
-                <p>Of {len(status_df)} total</p>
+                <p>Of {total_generators} total</p>
             </div>
             """, unsafe_allow_html=True)
         
-        # Proactive notifications section - COMBINED fault and service tickets
-        st.subheader("🔔 Proactive Customer Notifications")
-        
-        # Use the previously calculated DataFrames
-        fault_opportunities = status_opportunities
-        interval_opportunities = interval_opportunities_df
-        
-        # Combine both types of tickets
-        combined_tickets = []
-        
-        # Add fault-based tickets
-        for _, opportunity in fault_opportunities.iterrows():
-            try:
-                if opportunity['operational_status'] == 'FAULT':
-                    ticket_type = "🚨 FAULT RESPONSE"
-                    priority = "CRITICAL"
-                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
-                    action = "Contact immediately - Emergency service"
-                    service_detail = opportunity['fault_description']
-                    parts_needed = "TBD"
-                    runtime_hours = opportunity.get('runtime_hours', 5000)
-                else:
-                    ticket_type = "📅 PREVENTIVE SERVICE"
-                    priority = "HIGH"
-                    estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
-                    action = "Schedule within 72 hours"
-                    service_detail = f"Service due in {opportunity['next_service_hours']} hours"
-                    parts_needed = "Oil Filter, Oil"
-                    runtime_hours = opportunity.get('runtime_hours', 5000)
-                
-                combined_tickets.append({
-                    'Ticket ID': f"TK-{random.randint(10000, 99999)}",
-                    'Type': ticket_type,
-                    'Generator': opportunity['serial_number'],
-                    'Customer': opportunity['customer_name'][:20] + "...",
-                    'Contact': opportunity['customer_contact'],
-                    'Service Detail': service_detail,
-                    'Runtime Hours': f"{runtime_hours:,} hrs",
-                    'Parts Needed': parts_needed,
-                    'Priority': priority,
-                    'Est. Revenue': f"${estimated_revenue:,.0f}",
-                    'Action Required': action,
-                    'Ticket Source': 'fault'
-                })
-            except Exception as e:
-                continue
-        
-        # Add interval service tickets
-        for _, service in interval_opportunities.iterrows():
-            try:
-                if service['service_status'] == 'OVERDUE':
-                    ticket_type = f"🔴 {service['service_name'].upper()}"
-                    priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
-                    action = "Contact immediately - Service overdue"
-                elif service['priority'] == 'HIGH':
-                    ticket_type = f"🟡 {service['service_name'].upper()}"
-                    priority = "HIGH"
-                    action = "Schedule within 48 hours"
-                else:
-                    ticket_type = f"🟢 {service['service_name'].upper()}"
-                    priority = "MEDIUM"
-                    action = "Schedule within 1 week"
-                
-                combined_tickets.append({
-                    'Ticket ID': f"SV-{random.randint(10000, 99999)}",
-                    'Type': ticket_type,
-                    'Generator': service['serial_number'],
-                    'Customer': service['customer_name'][:20] + "...",
-                    'Contact': service['customer_contact'],
-                    'Service Detail': service['service_detail'],
-                    'Runtime Hours': f"{service['runtime_hours']:,} hrs",
-                    'Parts Needed': service['parts_needed'],
-                    'Priority': priority,
-                    'Est. Revenue': f"${service['estimated_cost']:,.0f}",
-                    'Action Required': action,
-                    'Ticket Source': 'service'
-                })
-            except Exception as e:
-                continue
-        
-        if combined_tickets:
-            st.markdown("""
-            <div class="proactive-alert">
-                <h4>🚨 Immediate Action Required</h4>
-                <p>The following customers should be contacted proactively to arrange service and maximize revenue:</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Display combined tickets table
-            tickets_df = pd.DataFrame(combined_tickets)
-            
-            # Sort by priority (Critical first, then High, then Medium)
-            priority_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
-            tickets_df['priority_sort'] = tickets_df['Priority'].map(priority_order)
-            tickets_df = tickets_df.sort_values('priority_sort').drop('priority_sort', axis=1)
-            
-            # Display the table without the Ticket Source column (internal use only)
-            display_df = tickets_df.drop(['Ticket Source'], axis=1)
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            # Work Order Creation Section
-            st.subheader("📋 Work Order Management")
-            
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                # Select ticket for work order creation
-                ticket_options = [
-                    f"{row['Ticket ID']} - {row['Type']} - {row['Generator']} - {row['Customer']}"
-                    for _, row in tickets_df.iterrows()
-                ]
-                
-                if ticket_options:
-                    selected_ticket = st.selectbox(
-                        "Select ticket to create work order:",
-                        options=ticket_options,
-                        key="wo_ticket_select"
-                    )
-                    
-                    if selected_ticket:
-                        # Get selected ticket details
-                        ticket_id = selected_ticket.split(' - ')[0]
-                        selected_row = tickets_df[tickets_df['Ticket ID'] == ticket_id].iloc[0]
-                        
-                        # Technician assignment
-                        technician_options = [
-                            "Ahmed Al-Rashid (Riyadh Region)",
-                            "Mohammed Al-Saud (Jeddah Region)", 
-                            "Khalid Al-Otaibi (Eastern Region)",
-                            "Abdullah Al-Nasser (NEOM Region)",
-                            "Auto-assign based on location"
-                        ]
-                        
-                        selected_technician = st.selectbox(
-                            "Assign technician:",
-                            options=technician_options,
-                            key="technician_select"
-                        )
-                        
-                        # Schedule options
-                        schedule_options = [
-                            "🚨 Emergency - Same day",
-                            "⚡ Urgent - Within 24 hours", 
-                            "📅 Scheduled - Within 3 days",
-                            "📆 Planned - Within 1 week"
-                        ]
-                        
-                        selected_schedule = st.selectbox(
-                            "Schedule priority:",
-                            options=schedule_options,
-                            key="schedule_select"
-                        )
-                        
-                        # Additional work order notes
-                        wo_notes = st.text_area(
-                            "Work order notes:",
-                            placeholder="Enter special instructions, customer requirements, site access details...",
-                            key="wo_notes"
-                        )
-                else:
-                    st.info("No tickets available for work order creation")
-            
-            with col2:
-                st.write("**Selected Ticket Details:**")
-                if 'selected_ticket' in locals() and selected_ticket and 'selected_row' in locals():
-                    st.info(f"""
-                    **Generator:** {selected_row['Generator']}
-                    **Customer:** {selected_row['Customer']}
-                    **Type:** {selected_row['Type']}
-                    **Priority:** {selected_row['Priority']}
-                    **Revenue:** {selected_row['Est. Revenue']}
-                    **Parts:** {selected_row['Parts Needed'][:30]}...
-                    """)
-                
-                st.write("**🔧 Action Buttons:**")
-                
-                if st.button("📋 Create Work Order", use_container_width=True, type="primary"):
-                    if 'selected_ticket' in locals() and selected_ticket and 'selected_technician' in locals() and 'selected_schedule' in locals():
-                        wo_number = f"WO-{random.randint(100000, 999999)}"
-                        st.success(f"✅ Work Order {wo_number} created successfully!")
-                        st.info(f"👷 Assigned to: {selected_technician.split('(')[0].strip()}")
-                        st.info(f"⏰ Schedule: {selected_schedule}")
-                        if 'selected_row' in locals():
-                            st.info(f"📧 Customer notification sent to {selected_row['Contact']}")
-                        
-                        # Show work order summary
-                        with st.expander("📋 Work Order Summary"):
-                            if 'selected_row' in locals():
-                                st.write(f"""
-                                **Work Order:** {wo_number}
-                                **Ticket:** {selected_row['Ticket ID']}
-                                **Generator:** {selected_row['Generator']}
-                                **Customer:** {selected_row['Customer']}
-                                **Service Type:** {selected_row['Type']}
-                                **Technician:** {selected_technician}
-                                **Schedule:** {selected_schedule}
-                                **Estimated Revenue:** {selected_row['Est. Revenue']}
-                                **Parts Required:** {selected_row['Parts Needed']}
-                                **Notes:** {'wo_notes' if 'wo_notes' in locals() and wo_notes else 'None'}
-                                """)
-                    else:
-                        st.error("Please select all required fields")
-                
-                if st.button("📞 Mark as Contacted", use_container_width=True):
-                    if 'ticket_id' in locals():
-                        st.success(f"📞 Ticket {ticket_id} marked as contacted")
-                        st.info("⏰ Follow-up reminder set for 24 hours")
-                
-                if st.button("❌ Close Ticket", use_container_width=True):
-                    if 'ticket_id' in locals():
-                        st.warning(f"❌ Ticket {ticket_id} closed")
-                        st.info("📝 Reason required for closure")
-                
-                if st.button("📧 Send Quote", use_container_width=True):
-                    st.success("📧 Service quote sent to customer!")
-                    st.info("💰 Quote includes labor and parts estimate")
-            
-            # Quick contact actions
-            st.subheader("📞 Quick Customer Contact")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                if st.button("📧 Send Email Notifications", use_container_width=True, type="primary"):
-                    st.success(f"✅ Email notifications sent to {len(tickets)} customers!")
-                    st.info("📋 Auto-generated service proposals attached")
-            
-            with col2:
-                if st.button("📱 Generate Call List", use_container_width=True):
-                    st.success("📞 Call list generated and assigned to service team")
-                    st.download_button(
-                        "📄 Download Call List",
-                        data=tickets_df.to_csv(index=False),
-                        file_name=f"service_calls_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv"
-                    )
-            
-            with col3:
-                if st.button("🎫 Create Work Orders", use_container_width=True):
-                    st.success(f"✅ {len(tickets)} work orders created in system")
-                    st.info("💰 Estimated total revenue: ${:,.0f}".format(sum([CONFIG['revenue_targets']['service_revenue_per_ticket'] for _ in tickets])))
-        
+        # Show tickets if any exist
+        if total_opportunities > 0:
+            show_combined_tickets(status_df, interval_service_df)
         else:
             st.success("✅ No immediate proactive notifications required!")
-            
-            # Show summary of what we checked
-            st.info(f"""
-            **System Status:**
-            - ✅ {len(status_df)} generators checked for faults
-            - ✅ {len(interval_service_df)} generators checked for service intervals  
-            - ✅ All systems operating within normal parameters
-            """)
-            
-            # Show next upcoming services
-            upcoming_services = interval_service_df[
-                (interval_service_df['hours_to_next_service'] > 0) & 
-                (interval_service_df['hours_to_next_service'] <= 500)
-            ].sort_values('hours_to_next_service').head(5)
-            
-            if not upcoming_services.empty:
-                st.info("📅 **Next Upcoming Services:**")
-                upcoming_display = upcoming_services[['serial_number', 'customer_name', 'service_name', 'hours_to_next_service', 'estimated_cost']].copy()
-                upcoming_display.columns = ['Generator', 'Customer', 'Service Type', 'Hours Until Due', 'Est. Revenue']
-                st.dataframe(upcoming_display, use_container_width=True, hide_index=True)
-        
-        # INTERVAL SERVICE MANAGEMENT SECTION
-        st.subheader("⏰ Interval Service Management")
-        st.markdown("### Professional Generator Maintenance Scheduling")
-        
-        # Service type explanation
-        st.markdown("""
-        **🔧 Service Types:**
-        - **Minor Service** (250-500 hrs): Oil change, filters, basic checks
-        - **Intermediate Service** (1,000 hrs): Comprehensive inspection, load testing  
-        - **Major Service** (10,000-20,000 hrs): Complete overhaul, engine rebuild
-        """)
-        
-        # Filter generators that need interval service contact
-        interval_contact_needed = interval_service_df[interval_service_df['needs_contact'] == True].copy()
-        
-        # Interval service metrics with service type breakdown
-        col1, col2, col3, col4 = st.columns(4)
-        
-        total_interval_services = len(interval_contact_needed)
-        
-        # Count by service type
-        minor_services = len(interval_service_df[interval_service_df['service_type'] == 'minor'])
-        intermediate_services = len(interval_service_df[interval_service_df['service_type'] == 'intermediate']) 
-        major_services = len(interval_service_df[interval_service_df['service_type'] == 'major'])
-        
-        total_interval_revenue = interval_service_df[interval_service_df['needs_contact'] == True]['estimated_cost'].sum()
-        
-        with col1:
-            st.markdown(f"""
-            <div class="service-due-card">
-                <h4>📞 Total Services Due</h4>
-                <h2>{total_interval_services}</h2>
-                <p>Require customer contact</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="revenue-opportunity">
-                <h4>🔧 Service Breakdown</h4>
-                <h2>{minor_services + intermediate_services + major_services}</h2>
-                <p style='font-size:12px;'>🟢 {minor_services} Minor | 🟡 {intermediate_services} Inter | 🔴 {major_services} Major</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            critical_services = len(interval_service_df[interval_service_df['priority'] == 'CRITICAL'])
-            high_services = len(interval_service_df[interval_service_df['priority'] == 'HIGH'])
-            
-            st.markdown(f"""
-            <div class="ticket-card">
-                <h4>⚠️ High Priority</h4>
-                <h2>{critical_services + high_services}</h2>
-                <p style='font-size:12px;'>🔴 {critical_services} Critical | 🟠 {high_services} High</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col4:
-            st.markdown(f"""
-            <div class="revenue-opportunity">
-                <h4>💰 Service Revenue</h4>
-                <h2>${total_interval_revenue:,.0f}</h2>
-                <p>From scheduled services</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if not interval_contact_needed.empty:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #1976d2 0%, #2196f3 100%); padding: 1rem; border-radius: 8px; color: white; margin: 1rem 0;">
-                <h4>📞 Interval Service Contact List</h4>
-                <p>Generators approaching service intervals - Contact customers to schedule maintenance</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Create enhanced interval service table with professional service details
-            interval_display_data = []
-            for idx, service in interval_contact_needed.iterrows():
-                
-                # Service type icon
-                service_icon = {
-                    'minor': '🟢',
-                    'intermediate': '🟡', 
-                    'major': '🔴'
-                }.get(service['service_type'], '⚪')
-                
-                interval_display_data.append({
-                    'Service ID': f"SV-{service['serial_number'][-4:]}",
-                    'Generator': service['serial_number'],
-                    'Customer': service['customer_name'][:20] + "...",
-                    'Contact': service['customer_contact'],
-                    'Service Type': f"{service_icon} {service['service_name']}",
-                    'Runtime': f"{service['runtime_hours']:,} hrs",
-                    'Interval': f"{service['service_interval']} hrs",
-                    'Status': service['service_status'],
-                    'Priority': service['priority'],
-                    'Service Detail': service['service_detail'],
-                    'Tasks Required': service['tasks_required'],
-                    'Parts Needed': service['parts_needed'][:50] + "..." if len(service['parts_needed']) > 50 else service['parts_needed'],
-                    'Est. Cost': f"${service['estimated_cost']:,.0f}"
-                })
-            
-            interval_df_display = pd.DataFrame(interval_display_data)
-            st.dataframe(interval_df_display, use_container_width=True, hide_index=True)
-            
-            # Customer contact management section
-            st.subheader("📞 Customer Contact Management")
-            
-            # Contact action interface
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                selected_service = st.selectbox(
-                    "Select service to update:",
-                    options=[f"{row['Service ID']} - {row['Generator']} - {row['Customer']}" for row in interval_display_data],
-                    key="interval_service_select"
-                )
-                
-                contact_action = st.radio(
-                    "Contact Action:",
-                    ["📞 Called Customer", "📧 Sent Email", "📅 Service Booked", "❌ Close (No Service)"],
-                    key="contact_action"
-                )
-                
-                contact_notes = st.text_area(
-                    "Contact Notes:",
-                    placeholder="Enter details about customer contact, service agreement, or reason for closure...",
-                    key="contact_notes"
-                )
-            
-            with col2:
-                st.write("**Action Buttons:**")
-                
-                if st.button("💾 Update Contact Status", use_container_width=True, type="primary"):
-                    if contact_notes.strip():
-                        if "Service Booked" in contact_action:
-                            st.success(f"✅ Service booked for {selected_service.split(' - ')[1]}!")
-                            st.info("📋 Work order automatically created")
-                            st.info("📧 Confirmation email sent to customer")
-                        elif "Close" in contact_action:
-                            st.warning(f"❌ Service closed for {selected_service.split(' - ')[1]}")
-                            st.info("📝 Notes saved for future reference")
-                        else:
-                            st.success(f"📞 Contact status updated for {selected_service.split(' - ')[1]}")
-                            st.info("⏰ Follow-up reminder set for 24 hours")
-                    else:
-                        st.error("Please enter contact notes before updating")
-                
-                if st.button("📋 Create Work Order", use_container_width=True):
-                    st.success("📋 Work order created!")
-                    st.info("👷 Technician will be assigned automatically")
-                
-                if st.button("📧 Send Service Quote", use_container_width=True):
-                    st.success("📧 Service quote sent to customer!")
-                    st.info("💰 Includes parts and labor estimates")
-                
-                if st.button("📞 Add to Call Queue", use_container_width=True):
-                    st.success("📞 Added to priority call queue!")
-                    st.info("🔔 Sales team will be notified")
-            
-            # Quick bulk actions
-            st.subheader("⚡ Bulk Actions")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                if st.button("📧 Email All Customers", use_container_width=True):
-                    st.success(f"📧 Service reminder emails sent to {len(interval_contact_needed)} customers!")
-                    st.info("📋 Automated service quotes included")
-            
-            with col2:
-                if st.button("📞 Generate Call List", use_container_width=True):
-                    st.success("📞 Priority call list generated!")
-                    st.download_button(
-                        "📄 Download Call List",
-                        data=interval_df_display.to_csv(index=False),
-                        file_name=f"interval_services_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv"
-                    )
-            
-            with col3:
-                if st.button("📋 Create All Work Orders", use_container_width=True):
-                    st.success(f"📋 {len(interval_contact_needed)} work orders created!")
-                    st.info(f"💰 Total revenue potential: ${total_interval_revenue:,.0f}")
-            
-            with col4:
-                if st.button("📊 Export Report", use_container_width=True):
-                    st.success("📊 Interval service report generated!")
-                    st.download_button(
-                        "📄 Download Report",
-                        data=interval_df_display.to_csv(index=False),
-                        file_name=f"interval_service_report_{datetime.now().strftime('%Y%m%d')}.csv",
-                        mime="text/csv"
-                    )
-        
-        else:
-            st.success("✅ No interval services requiring immediate contact - All generators on schedule!")
-            
-            # Show next upcoming services
-            upcoming_services = interval_service_df[
-                (interval_service_df['hours_to_next_service'] > 0) & 
-                (interval_service_df['hours_to_next_service'] <= 200)
-            ].sort_values('hours_to_next_service').head(5)
-            
-            if not upcoming_services.empty:
-                st.info("📅 **Upcoming Services (Next 200 hours):**")
-                upcoming_display = upcoming_services[['serial_number', 'customer_name', 'service_name', 'hours_to_next_service', 'estimated_cost']].copy()
-                upcoming_display.columns = ['Generator', 'Customer', 'Service Type', 'Hours Until Service', 'Est. Cost']
-                st.dataframe(upcoming_display, use_container_width=True, hide_index=True)
-        
-        # Service Portfolio Analysis
-        st.subheader("📊 Service Portfolio Analysis")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.write("**🔧 Service Type Revenue Breakdown:**")
-            
-            # Calculate revenue by service type
-            service_revenue = []
-            for service_type in ['minor', 'intermediate', 'major']:
-                type_services = interval_service_df[interval_service_df['service_type'] == service_type]
-                if not type_services.empty:
-                    count = len(type_services)
-                    revenue = type_services['estimated_cost'].sum()
-                    avg_cost = revenue / count if count > 0 else 0
-                    
-                    service_names = {
-                        'minor': '🟢 Minor Service',
-                        'intermediate': '🟡 Intermediate Service',
-                        'major': '🔴 Major Service'
-                    }
-                    
-                    service_revenue.append({
-                        'Service Type': service_names[service_type],
-                        'Count': count,
-                        'Total Revenue': f"${revenue:,.0f}",
-                        'Avg Cost': f"${avg_cost:,.0f}"
-                    })
-            
-            if service_revenue:
-                revenue_df = pd.DataFrame(service_revenue)
-                st.dataframe(revenue_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No service data available")
-        
-        with col2:
-            st.write("**⏰ Service Urgency Distribution:**")
-            
-            urgency_data = []
-            for status in ['OVERDUE', 'DUE SOON', 'SCHEDULED']:
-                status_services = interval_service_df[interval_service_df['service_status'] == status]
-                if not status_services.empty:
-                    count = len(status_services)
-                    revenue = status_services['estimated_cost'].sum()
-                    
-                    status_icons = {
-                        'OVERDUE': '🔴',
-                        'DUE SOON': '🟡',
-                        'SCHEDULED': '🟢'
-                    }
-                    
-                    urgency_data.append({
-                        'Status': f"{status_icons.get(status, '⚪')} {status}",
-                        'Count': count,
-                        'Revenue': f"${revenue:,.0f}"
-                    })
-            
-            if urgency_data:
-                urgency_df = pd.DataFrame(urgency_data)
-                st.dataframe(urgency_df, use_container_width=True, hide_index=True)
-            else:
-                st.info("No urgency data available")
-        
-        with col3:
-            st.write("**🏥 Critical Applications Priority:**")
-            
-            # Healthcare and critical applications get special attention
-            critical_apps = interval_service_df[interval_service_df['model_series'].str.contains('Healthcare|Industrial', na=False)]
-            
-            if not critical_apps.empty:
-                critical_summary = []
-                healthcare_count = len(critical_apps[critical_apps['model_series'].str.contains('Healthcare', na=False)])
-                industrial_count = len(critical_apps[critical_apps['model_series'].str.contains('Industrial', na=False)])
-                
-                if healthcare_count > 0:
-                    critical_summary.append({
-                        'Application': '🏥 Healthcare',
-                        'Count': healthcare_count,
-                        'Avg Interval': '600 hrs'
-                    })
-                
-                if industrial_count > 0:
-                    critical_summary.append({
-                        'Application': '🏭 Industrial',
-                        'Count': industrial_count,
-                        'Avg Interval': '800 hrs'
-                    })
-                
-                if critical_summary:
-                    critical_df = pd.DataFrame(critical_summary)
-                    st.dataframe(critical_df, use_container_width=True, hide_index=True)
-                    st.info("⚠️ Critical applications receive priority scheduling")
-            else:
-                st.info("No critical applications requiring service")
-        
-        # Service Schedule Overview
-        st.subheader("📅 Professional Service Schedule Overview")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**🔧 Service Categories & Costs:**")
-            
-            # Professional service breakdown with realistic costs
-            service_breakdown = [
-                {
-                    "Service Type": "🟢 Minor Service",
-                    "Interval": "250-500 hrs",
-                    "Typical Tasks": "Oil change, filters, basic inspection",
-                    "Avg Cost": "$450",
-                    "Duration": "2-3 hrs"
-                },
-                {
-                    "Service Type": "🟡 Intermediate Service", 
-                    "Interval": "1,000 hrs",
-                    "Typical Tasks": "Comprehensive inspection, load testing",
-                    "Avg Cost": "$850",
-                    "Duration": "4-6 hrs"
-                },
-                {
-                    "Service Type": "🔴 Major Service",
-                    "Interval": "10,000-20,000 hrs", 
-                    "Typical Tasks": "Complete overhaul, engine rebuild",
-                    "Avg Cost": "$12,500",
-                    "Duration": "3-5 days"
-                }
-            ]
-            
-            service_df = pd.DataFrame(service_breakdown)
-            st.dataframe(service_df, use_container_width=True, hide_index=True)
-        
-        with col2:
-            st.write("**💰 Revenue Opportunity Analysis:**")
-            
-            # Calculate actual revenue potential from current data
-            if not interval_service_df.empty:
-                revenue_analysis = []
-                
-                for service_type in ['minor', 'intermediate', 'major']:
-                    type_data = interval_service_df[interval_service_df['service_type'] == service_type]
-                    if not type_data.empty:
-                        due_count = len(type_data[type_data['needs_contact'] == True])
-                        total_revenue = type_data[type_data['needs_contact'] == True]['estimated_cost'].sum()
-                        
-                        service_names = {
-                            'minor': '🟢 Minor',
-                            'intermediate': '🟡 Intermediate', 
-                            'major': '🔴 Major'
-                        }
-                        
-                        revenue_analysis.append({
-                            "Type": service_names[service_type],
-                            "Due Now": due_count,
-                            "Revenue": f"${total_revenue:,.0f}",
-                            "Avg Value": f"${total_revenue/due_count:,.0f}" if due_count > 0 else "$0"
-                        })
-                
-                if revenue_analysis:
-                    revenue_df = pd.DataFrame(revenue_analysis)
-                    st.dataframe(revenue_df, use_container_width=True, hide_index=True)
-                else:
-                    st.info("No current revenue opportunities")
-            else:
-                st.info("No service data available")
-        
-        # Fleet status overview
-        st.subheader("🗺️ Fleet Status Overview")
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            # Status summary
-            status_summary = status_df['operational_status'].value_counts()
-            
-            fig = px.pie(
-                values=status_summary.values, 
-                names=status_summary.index,
-                title="Generator Operational Status",
-                color_discrete_map={
-                    'RUNNING': '#4CAF50',
-                    'FAULT': '#F44336', 
-                    'STANDBY': '#9E9E9E',
-                    'MAINTENANCE': '#FF9800'
-                }
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            # Revenue opportunities by customer
-            revenue_by_customer = status_df[status_df['revenue_opportunity'] == True].groupby('customer_name').size().reset_index()
-            revenue_by_customer.columns = ['Customer', 'Opportunities']
-            revenue_by_customer = revenue_by_customer.sort_values('Opportunities', ascending=False).head(8)
-            
-            if not revenue_by_customer.empty:
-                fig2 = px.bar(
-                    revenue_by_customer, 
-                    x='Opportunities', 
-                    y='Customer',
-                    title="Revenue Opportunities by Customer",
-                    orientation='h'
-                )
-                fig2.update_layout(height=400)
-                st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("No current revenue opportunities identified")
-        
-        with col3:
-            # Technician assignment and parts status
-            st.write("**👷 Technician Assignment:**")
-            
-            # Mock technician data
-            total_tickets = len(proactive_opportunities) if 'proactive_opportunities' in locals() else 0
-            technicians = [
-                {"Name": "Ahmed Al-Rashid", "Region": "Riyadh", "Assigned": min(6, total_tickets//3), "Available": "✅"},
-                {"Name": "Mohammed Al-Saud", "Region": "Jeddah", "Assigned": min(4, total_tickets//4), "Available": "✅"},
-                {"Name": "Khalid Al-Otaibi", "Region": "Eastern", "Assigned": min(5, total_tickets//3), "Available": "🟡"},
-                {"Name": "Abdullah Al-Nasser", "Region": "NEOM", "Assigned": min(2, total_tickets//5), "Available": "✅"}
-            ]
-            
-            tech_df = pd.DataFrame(technicians)
-            st.dataframe(tech_df, use_container_width=True, hide_index=True)
-            
-            st.write("**📦 Critical Parts Status:**")
-            
-            parts_status = [
-                {"Part": "Oil Filters", "Stock": 45, "Status": "✅"},
-                {"Part": "Air Filters", "Stock": 12, "Status": "🟡"},
-                {"Part": "Belt Kits", "Stock": 8, "Status": "🔴"},
-                {"Part": "Oil (20L)", "Stock": 28, "Status": "✅"}
-            ]
-            
-            parts_df = pd.DataFrame(parts_status)
-            st.dataframe(parts_df, use_container_width=True, hide_index=True)
-            
-            if st.button("📋 Generate Purchase Order", use_container_width=True):
-                st.success("PO generated for low-stock items!")
-        
-        # Weekly Service Metrics
-        st.subheader("📊 Weekly Service Performance Metrics")
-        
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("This Week's Revenue", "$12,750", delta="+15% vs last week")
-        with col2:
-            st.metric("Tickets Closed", "23", delta="+8 this week")
-        with col3:
-            st.metric("Avg Response Time", "2.3 hrs", delta="-0.5 hrs improved")
-        with col4:
-            st.metric("Customer Satisfaction", "94%", delta="+2% this month")
+            show_system_status(status_df, interval_service_df)
     
     except Exception as e:
         st.error(f"Error loading work management dashboard: {str(e)}")
-        st.info("Please try refreshing the page. If the problem persists, contact system administrator.")
-        
-        # Show basic fallback interface
-        st.subheader("🔧 System Status")
-        st.warning("Dashboard temporarily unavailable - showing basic status")
-        
+        st.info("Please try refreshing the page.")
         if st.button("🔄 Retry Loading Dashboard"):
             st.rerun()
+
+def show_combined_tickets(status_df, interval_service_df):
+    """Display combined fault and service tickets."""
+    st.subheader("🔔 Proactive Customer Notifications")
+    
+    # Get fault opportunities
+    fault_opportunities = status_df[
+        (status_df['needs_proactive_contact'] == True) | 
+        (status_df['operational_status'] == 'FAULT')
+    ]
+    
+    # Get interval opportunities
+    interval_opportunities = interval_service_df[interval_service_df['needs_contact'] == True] if not interval_service_df.empty else pd.DataFrame()
+    
+    # Combine tickets
+    combined_tickets = []
+    
+    # Add fault tickets
+    for _, opportunity in fault_opportunities.iterrows():
+        try:
+            if opportunity['operational_status'] == 'FAULT':
+                ticket_type = "🚨 FAULT RESPONSE"
+                priority = "CRITICAL"
+                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket'] * 1.5
+                action = "Contact immediately - Emergency service"
+                service_detail = opportunity['fault_description']
+                parts_needed = "TBD"
+            else:
+                ticket_type = "📅 PREVENTIVE SERVICE"
+                priority = "HIGH"
+                estimated_revenue = CONFIG['revenue_targets']['service_revenue_per_ticket']
+                action = "Schedule within 72 hours"
+                service_detail = f"Service due in {opportunity['next_service_hours']} hours"
+                parts_needed = "Oil Filter, Oil"
+            
+            combined_tickets.append({
+                'Ticket ID': f"TK-{random.randint(10000, 99999)}",
+                'Type': ticket_type,
+                'Generator': opportunity['serial_number'],
+                'Customer': opportunity['customer_name'][:20] + "...",
+                'Contact': opportunity['customer_contact'],
+                'Service Detail': service_detail,
+                'Runtime Hours': f"{opportunity.get('runtime_hours', 5000):,} hrs",
+                'Parts Needed': parts_needed,
+                'Priority': priority,
+                'Est. Revenue': f"${estimated_revenue:,.0f}",
+                'Action Required': action
+            })
+        except Exception:
+            continue
+    
+    # Add interval service tickets
+    for _, service in interval_opportunities.iterrows():
+        try:
+            if service['service_status'] == 'OVERDUE':
+                ticket_type = f"🔴 {service['service_name'].upper()}"
+                priority = "CRITICAL" if service['service_type'] == 'major' else "HIGH"
+                action = "Contact immediately - Service overdue"
+            elif service['priority'] == 'HIGH':
+                ticket_type = f"🟡 {service['service_name'].upper()}"
+                priority = "HIGH"
+                action = "Schedule within 48 hours"
+            else:
+                ticket_type = f"🟢 {service['service_name'].upper()}"
+                priority = "MEDIUM"
+                action = "Schedule within 1 week"
+            
+            combined_tickets.append({
+                'Ticket ID': f"SV-{random.randint(10000, 99999)}",
+                'Type': ticket_type,
+                'Generator': service['serial_number'],
+                'Customer': service['customer_name'][:20] + "...",
+                'Contact': service['customer_contact'],
+                'Service Detail': service['service_detail'],
+                'Runtime Hours': f"{service['runtime_hours']:,} hrs",
+                'Parts Needed': service['parts_needed'],
+                'Priority': priority,
+                'Est. Revenue': f"${service['estimated_cost']:,.0f}",
+                'Action Required': action
+            })
+        except Exception:
+            continue
+    
+    if combined_tickets:
+        st.markdown("""
+        <div class="proactive-alert">
+            <h4>🚨 Immediate Action Required</h4>
+            <p>The following customers should be contacted proactively to arrange service and maximize revenue:</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display tickets table
+        tickets_df = pd.DataFrame(combined_tickets)
+        
+        # Sort by priority
+        priority_order = {'CRITICAL': 0, 'HIGH': 1, 'MEDIUM': 2}
+        tickets_df['priority_sort'] = tickets_df['Priority'].map(priority_order)
+        tickets_df = tickets_df.sort_values('priority_sort').drop('priority_sort', axis=1)
+        
+        st.dataframe(tickets_df, use_container_width=True, hide_index=True)
+        
+        # Work Order Management
+        show_work_order_management(tickets_df)
+
+def show_work_order_management(tickets_df):
+    """Work order creation and management interface."""
+    st.subheader("📋 Work Order Management")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        if not tickets_df.empty:
+            ticket_options = [
+                f"{row['Ticket ID']} - {row['Type']} - {row['Generator']} - {row['Customer']}"
+                for _, row in tickets_df.iterrows()
+            ]
+            
+            selected_ticket = st.selectbox(
+                "Select ticket to create work order:",
+                options=ticket_options,
+                key="wo_ticket_select"
+            )
+            
+            if selected_ticket:
+                ticket_id = selected_ticket.split(' - ')[0]
+                selected_row = tickets_df[tickets_df['Ticket ID'] == ticket_id].iloc[0]
+                
+                technician_options = [
+                    "Ahmed Al-Rashid (Riyadh Region)",
+                    "Mohammed Al-Saud (Jeddah Region)", 
+                    "Khalid Al-Otaibi (Eastern Region)",
+                    "Abdullah Al-Nasser (NEOM Region)",
+                    "Auto-assign based on location"
+                ]
+                
+                selected_technician = st.selectbox(
+                    "Assign technician:",
+                    options=technician_options,
+                    key="technician_select"
+                )
+                
+                schedule_options = [
+                    "🚨 Emergency - Same day",
+                    "⚡ Urgent - Within 24 hours", 
+                    "📅 Scheduled - Within 3 days",
+                    "📆 Planned - Within 1 week"
+                ]
+                
+                selected_schedule = st.selectbox(
+                    "Schedule priority:",
+                    options=schedule_options,
+                    key="schedule_select"
+                )
+                
+                wo_notes = st.text_area(
+                    "Work order notes:",
+                    placeholder="Enter special instructions...",
+                    key="wo_notes"
+                )
+        else:
+            st.info("No tickets available for work order creation")
+    
+    with col2:
+        st.write("**Selected Ticket Details:**")
+        if 'selected_row' in locals():
+            st.info(f"""
+            **Generator:** {selected_row['Generator']}
+            **Customer:** {selected_row['Customer']}
+            **Type:** {selected_row['Type']}
+            **Priority:** {selected_row['Priority']}
+            **Revenue:** {selected_row['Est. Revenue']}
+            """)
+        
+        st.write("**🔧 Action Buttons:**")
+        
+        if st.button("📋 Create Work Order", use_container_width=True, type="primary"):
+            if 'selected_ticket' in locals() and 'selected_technician' in locals() and 'selected_schedule' in locals():
+                wo_number = f"WO-{random.randint(100000, 999999)}"
+                st.success(f"✅ Work Order {wo_number} created successfully!")
+                if 'selected_technician' in locals():
+                    st.info(f"👷 Assigned to: {selected_technician.split('(')[0].strip()}")
+                if 'selected_schedule' in locals():
+                    st.info(f"⏰ Schedule: {selected_schedule}")
+            else:
+                st.error("Please select all required fields")
+        
+        if st.button("📞 Mark as Contacted", use_container_width=True):
+            st.success("📞 Contact status updated!")
+        
+        if st.button("❌ Close Ticket", use_container_width=True):
+            st.warning("❌ Ticket closed")
+        
+        if st.button("📧 Send Quote", use_container_width=True):
+            st.success("📧 Quote sent to customer!")
+
+def show_system_status(status_df, interval_service_df):
+    """Show system status when no tickets are active."""
+    st.info(f"""
+    **System Status:**
+    - ✅ {len(status_df)} generators checked for faults
+    - ✅ {len(interval_service_df)} generators checked for service intervals  
+    - ✅ All systems operating within normal parameters
+    """)
 
 # ========================================
 # ENHANCED CUSTOMER PORTAL
@@ -1323,22 +862,7 @@ def show_enhanced_customer_portal():
         
         st.markdown(f"### Welcome, {selected_customer}")
         
-        # Real-time notifications for customer
-        fault_generators = customer_status[customer_status['operational_status'] == 'FAULT']
-        service_due_generators = customer_status[customer_status['needs_proactive_contact'] == True]
-        
-        if not fault_generators.empty:
-            st.markdown("""
-            <div class="proactive-alert">
-                <h4>🚨 URGENT: Generator Fault Detected</h4>
-                <p>One or more of your generators has detected a fault. Our service team will contact you shortly.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        if not service_due_generators.empty:
-            st.info(f"📅 **Service Reminder:** {len(service_due_generators)} generator(s) due for scheduled maintenance within 72 hours")
-        
-        # Customer fleet overview
+        # Customer metrics
         col1, col2, col3, col4, col5 = st.columns(5)
         
         total_capacity = customer_generators['rated_kw'].sum()
@@ -1358,159 +882,88 @@ def show_enhanced_customer_portal():
         with col5:
             st.metric("Average Load", f"{avg_load:.1f}%")
         
-        # Detailed generator status with live sensor readings
-        st.subheader("⚡ Your Generator Fleet - Live Status & Sensor Readings")
+        # Generator status details
+        st.subheader("⚡ Your Generator Fleet - Live Status")
         
-        if customer_status.empty:
-            st.warning("No real-time data available for your generators. Please contact support.")
-            return
+        if not customer_status.empty:
+            for _, gen_status in customer_status.iterrows():
+                try:
+                    gen_info = customer_generators[customer_generators['serial_number'] == gen_status['serial_number']].iloc[0]
+                    
+                    status_class = f"generator-{gen_status['status_color']}"
+                    
+                    if gen_status['operational_status'] == 'RUNNING':
+                        status_icon = "🟢 RUNNING"
+                        status_detail = f"Load: {gen_status['load_percent']}% | All systems normal"
+                    elif gen_status['operational_status'] == 'FAULT':
+                        status_icon = "🔴 FAULT"
+                        status_detail = f"⚠️ {gen_status['fault_description']}"
+                    elif gen_status['operational_status'] == 'STANDBY':
+                        status_icon = "⚪ STANDBY"
+                        status_detail = "Generator ready - Not currently needed"
+                    else:
+                        status_icon = "🟡 MAINTENANCE"
+                        status_detail = "Scheduled maintenance in progress"
+                    
+                    col1, col2 = st.columns([2, 3])
+                    
+                    with col1:
+                        st.markdown(f"""
+                        <div class="{status_class}">
+                            <h4>{gen_status['serial_number']} - {status_icon}</h4>
+                            <p><strong>Model:</strong> {gen_info['model_series']}</p>
+                            <p><strong>Capacity:</strong> {gen_info['rated_kw']} kW</p>
+                            <p><strong>Status:</strong> {status_detail}</p>
+                            <p><strong>Location:</strong> {gen_info['location_city']}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        sensor_col1, sensor_col2, sensor_col3, sensor_col4 = st.columns(4)
+                        
+                        with sensor_col1:
+                            oil_color = "🟢" if gen_status['oil_pressure'] >= 28 else "🟡" if gen_status['oil_pressure'] >= 25 else "🔴"
+                            st.metric("Oil Pressure", f"{gen_status['oil_pressure']} PSI", delta=f"{oil_color}")
+                        
+                        with sensor_col2:
+                            temp_color = "🟢" if gen_status['coolant_temp'] <= 95 else "🟡" if gen_status['coolant_temp'] <= 105 else "🔴"
+                            st.metric("Coolant Temp", f"{gen_status['coolant_temp']}°C", delta=f"{temp_color}")
+                        
+                        with sensor_col3:
+                            vib_color = "🟢" if gen_status['vibration'] <= 4.0 else "🟡" if gen_status['vibration'] <= 5.0 else "🔴"
+                            st.metric("Vibration", f"{gen_status['vibration']} mm/s", delta=f"{vib_color}")
+                        
+                        with sensor_col4:
+                            fuel_color = "🟢" if gen_status['fuel_level'] >= 50 else "🟡" if gen_status['fuel_level'] >= 20 else "🔴"
+                            st.metric("Fuel Level", f"{gen_status['fuel_level']}%", delta=f"{fuel_color}")
+                    
+                    st.markdown("---")
+                except Exception:
+                    continue
         
-        # Create detailed status display
-        for _, gen_status in customer_status.iterrows():
-            try:
-                gen_info = customer_generators[customer_generators['serial_number'] == gen_status['serial_number']].iloc[0]
-                
-                # Choose appropriate styling based on status
-                status_class = f"generator-{gen_status['status_color']}"
-                
-                # Status indicators
-                if gen_status['operational_status'] == 'RUNNING':
-                    status_icon = "🟢 RUNNING"
-                    status_detail = f"Load: {gen_status['load_percent']}% | All systems normal"
-                elif gen_status['operational_status'] == 'FAULT':
-                    status_icon = "🔴 FAULT"
-                    status_detail = f"⚠️ {gen_status['fault_description']}"
-                elif gen_status['operational_status'] == 'STANDBY':
-                    status_icon = "⚪ STANDBY"
-                    status_detail = "Generator ready - Not currently needed"
-                else:  # MAINTENANCE
-                    status_icon = "🟡 MAINTENANCE"
-                    status_detail = "Scheduled maintenance in progress"
-                
-                col1, col2 = st.columns([2, 3])
-                
-                with col1:
-                    st.markdown(f"""
-                    <div class="{status_class}">
-                        <h4>{gen_status['serial_number']} - {status_icon}</h4>
-                        <p><strong>Model:</strong> {gen_info['model_series']}</p>
-                        <p><strong>Capacity:</strong> {gen_info['rated_kw']} kW</p>
-                        <p><strong>Status:</strong> {status_detail}</p>
-                        <p><strong>Location:</strong> {gen_info['location_city']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    # Live sensor readings
-                    sensor_col1, sensor_col2, sensor_col3, sensor_col4 = st.columns(4)
-                    
-                    with sensor_col1:
-                        oil_color = "🟢" if gen_status['oil_pressure'] >= 28 else "🟡" if gen_status['oil_pressure'] >= 25 else "🔴"
-                        st.metric(
-                            "Oil Pressure", 
-                            f"{gen_status['oil_pressure']} PSI",
-                            delta=f"{oil_color} Normal" if gen_status['oil_pressure'] >= 28 else f"{oil_color} Alert"
-                        )
-                    
-                    with sensor_col2:
-                        temp_color = "🟢" if gen_status['coolant_temp'] <= 95 else "🟡" if gen_status['coolant_temp'] <= 105 else "🔴"
-                        st.metric(
-                            "Coolant Temp", 
-                            f"{gen_status['coolant_temp']}°C",
-                            delta=f"{temp_color} Normal" if gen_status['coolant_temp'] <= 95 else f"{temp_color} Alert"
-                        )
-                    
-                    with sensor_col3:
-                        vib_color = "🟢" if gen_status['vibration'] <= 4.0 else "🟡" if gen_status['vibration'] <= 5.0 else "🔴"
-                        st.metric(
-                            "Vibration", 
-                            f"{gen_status['vibration']} mm/s",
-                            delta=f"{vib_color} Normal" if gen_status['vibration'] <= 4.0 else f"{vib_color} Alert"
-                        )
-                    
-                    with sensor_col4:
-                        fuel_color = "🟢" if gen_status['fuel_level'] >= 50 else "🟡" if gen_status['fuel_level'] >= 20 else "🔴"
-                        st.metric(
-                            "Fuel Level", 
-                            f"{gen_status['fuel_level']}%",
-                            delta=f"{fuel_color} Good" if gen_status['fuel_level'] >= 50 else f"{fuel_color} Low"
-                        )
-                
-                st.markdown("---")
-                
-            except Exception as e:
-                st.warning(f"Error displaying generator {gen_status.get('serial_number', 'Unknown')}: {str(e)}")
-                continue
-        
-        # Quick service requests
+        # Quick actions
         st.subheader("🚀 Service & Support")
         
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if st.button("📅 Schedule Maintenance", use_container_width=True):
-                st.success("✅ Maintenance request submitted! Our team will contact you within 2 hours.")
+                st.success("✅ Maintenance request submitted!")
         
         with col2:
             if st.button("🚨 Report Emergency", use_container_width=True, type="primary"):
-                st.success("🚨 Emergency ticket created! Technician dispatched - ETA: 45 minutes")
+                st.success("🚨 Emergency ticket created!")
         
         with col3:
             if st.button("🛒 Request Parts Quote", use_container_width=True):
-                st.success("🛒 Parts specialist will contact you with a quote within 4 hours")
+                st.success("🛒 Parts specialist will contact you!")
         
         with col4:
             if st.button("📞 Contact Support", use_container_width=True):
-                st.success("📞 Support ticket created. Response time: 1 hour")
+                st.success("📞 Support ticket created!")
         
-        # Fleet performance summary
-        st.subheader("📊 Fleet Performance Summary")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Status distribution pie chart
-            status_counts = customer_status['operational_status'].value_counts()
-            if not status_counts.empty:
-                fig = px.pie(
-                    values=status_counts.values,
-                    names=status_counts.index,
-                    title="Current Fleet Status",
-                    color_discrete_map={
-                        'RUNNING': '#4CAF50',
-                        'FAULT': '#F44336',
-                        'STANDBY': '#9E9E9E', 
-                        'MAINTENANCE': '#FF9800'
-                    }
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("No status data available for charts")
-        
-        with col2:
-            # Load distribution
-            if not customer_status.empty:
-                fig2 = px.bar(
-                    x=customer_status['serial_number'],
-                    y=customer_status['load_percent'],
-                    title="Generator Load Distribution",
-                    labels={'x': 'Generator', 'y': 'Load %'}
-                )
-                fig2.update_xaxis(tickangle=45)
-                st.plotly_chart(fig2, use_container_width=True)
-            else:
-                st.info("No load data available for charts")
-    
     except Exception as e:
         st.error(f"Error loading customer portal: {str(e)}")
-        st.info("Please try refreshing the page. If the problem persists, contact support.")
-        
-        # Show basic fallback interface
-        st.subheader("🔧 System Status")
-        st.warning("Customer portal temporarily unavailable")
-        
-        if st.button("🔄 Retry Loading Portal"):
-            st.rerun()
 
 # ========================================
 # MAIN APPLICATION
@@ -1538,7 +991,7 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # Role-based navigation (CEO Dashboard removed)
+    # Role-based navigation
     if st.session_state.user_role in ["operations@powersystem", "service@powersystem", "sales@powersystem"]:
         pages = {
             "🎫 Work Management": show_work_management_dashboard,
