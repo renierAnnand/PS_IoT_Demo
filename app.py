@@ -1803,9 +1803,178 @@ def show_enhanced_customer_portal():
             st.metric("Average Load", f"{avg_load:.1f}%")
         
         # ================================
-        # DETAILED SENSOR DATA SECTION (unchanged)
+        # 24-HOUR SENSOR TRENDS - MAIN SECTION
+        # ================================
+        st.subheader("📈 24-Hour Sensor Trends")
+        st.markdown("Real-time monitoring and historical data for your generator fleet")
+        
+        if not customer_status.empty:
+            # Show trends for the first generator or any generator with issues
+            primary_generator = None
+            for _, gen_status in customer_status.iterrows():
+                if gen_status['operational_status'] == 'FAULT':
+                    primary_generator = gen_status
+                    break
+            
+            if primary_generator is None:
+                primary_generator = customer_status.iloc[0]
+            
+            # Get generator info
+            try:
+                gen_info = customer_generators[customer_generators['serial_number'] == primary_generator['serial_number']].iloc[0]
+                
+                st.info(f"📊 **Displaying trends for:** {primary_generator['serial_number']} - {gen_info['model_series']} ({gen_info['rated_kw']} kW)")
+                
+                # Create sample trend data for primary generator
+                import numpy as np
+                np.random.seed(hash(primary_generator['serial_number']) % 2**32)
+                hours = list(range(24))
+                
+                # Simulate realistic trends with more variation
+                base_oil = primary_generator['oil_pressure']
+                base_temp = primary_generator['coolant_temp']
+                base_vib = primary_generator['vibration']
+                base_fuel = primary_generator['fuel_level']
+                
+                # More realistic trend patterns
+                oil_trend = [max(20, min(35, base_oil + np.random.normal(0, 1) + 2*np.sin(h/24*2*np.pi))) for h in hours]
+                temp_trend = [max(70, min(110, base_temp + np.random.normal(0, 2) + 5*np.sin((h-12)/24*2*np.pi))) for h in hours]
+                vib_trend = [max(0.5, min(6, base_vib + np.random.normal(0, 0.3) + 0.5*np.sin(h/24*4*np.pi))) for h in hours]
+                fuel_trend = [max(10, min(100, base_fuel - h*0.5 + np.random.normal(0, 1))) for h in hours]
+                
+                # Display the main trend charts
+                trend_col1, trend_col2 = st.columns(2)
+                
+                with trend_col1:
+                    # Oil pressure trend - Enhanced styling
+                    fig_oil = go.Figure()
+                    fig_oil.add_trace(go.Scatter(
+                        x=hours, y=oil_trend, 
+                        mode='lines+markers', 
+                        name='Oil Pressure',
+                        line=dict(color='#1f77b4', width=3),
+                        marker=dict(size=6, color='#1f77b4')
+                    ))
+                    fig_oil.add_hline(
+                        y=25, line_dash="dash", line_color="red", line_width=2,
+                        annotation_text="Min Threshold", annotation_position="bottom right"
+                    )
+                    fig_oil.update_layout(
+                        title="Oil Pressure (PSI)", 
+                        height=250,
+                        showlegend=False, 
+                        margin=dict(l=50, r=50, t=50, b=50),
+                        plot_bgcolor='white',
+                        xaxis=dict(gridcolor='lightgray', title="Hours"),
+                        yaxis=dict(gridcolor='lightgray', title="PSI", range=[20, 40])
+                    )
+                    st.plotly_chart(fig_oil, use_container_width=True)
+                    
+                    # Vibration trend - Enhanced styling
+                    fig_vib = go.Figure()
+                    fig_vib.add_trace(go.Scatter(
+                        x=hours, y=vib_trend, 
+                        mode='lines+markers', 
+                        name='Vibration',
+                        line=dict(color='#9467bd', width=3),
+                        marker=dict(size=6, color='#9467bd')
+                    ))
+                    fig_vib.add_hline(
+                        y=4.0, line_dash="dash", line_color="orange", line_width=2,
+                        annotation_text="Warning Level", annotation_position="bottom right"
+                    )
+                    fig_vib.update_layout(
+                        title="Vibration (mm/s)", 
+                        height=250,
+                        showlegend=False, 
+                        margin=dict(l=50, r=50, t=50, b=50),
+                        plot_bgcolor='white',
+                        xaxis=dict(gridcolor='lightgray', title="Hours"),
+                        yaxis=dict(gridcolor='lightgray', title="mm/s", range=[0, 7])
+                    )
+                    st.plotly_chart(fig_vib, use_container_width=True)
+                
+                with trend_col2:
+                    # Temperature trend - Enhanced styling
+                    fig_temp = go.Figure()
+                    fig_temp.add_trace(go.Scatter(
+                        x=hours, y=temp_trend, 
+                        mode='lines+markers', 
+                        name='Temperature',
+                        line=dict(color='#d62728', width=3),
+                        marker=dict(size=6, color='#d62728')
+                    ))
+                    fig_temp.add_hline(
+                        y=95, line_dash="dash", line_color="orange", line_width=2,
+                        annotation_text="Warning Level", annotation_position="bottom right"
+                    )
+                    fig_temp.update_layout(
+                        title="Coolant Temperature (°C)", 
+                        height=250,
+                        showlegend=False, 
+                        margin=dict(l=50, r=50, t=50, b=50),
+                        plot_bgcolor='white',
+                        xaxis=dict(gridcolor='lightgray', title="Hours"),
+                        yaxis=dict(gridcolor='lightgray', title="°C", range=[70, 115])
+                    )
+                    st.plotly_chart(fig_temp, use_container_width=True)
+                    
+                    # Fuel level trend - Enhanced styling
+                    fig_fuel = go.Figure()
+                    fig_fuel.add_trace(go.Scatter(
+                        x=hours, y=fuel_trend, 
+                        mode='lines+markers', 
+                        name='Fuel Level',
+                        line=dict(color='#2ca02c', width=3),
+                        marker=dict(size=6, color='#2ca02c')
+                    ))
+                    fig_fuel.add_hline(
+                        y=20, line_dash="dash", line_color="red", line_width=2,
+                        annotation_text="Low Fuel", annotation_position="bottom right"
+                    )
+                    fig_fuel.update_layout(
+                        title="Fuel Level (%)", 
+                        height=250,
+                        showlegend=False, 
+                        margin=dict(l=50, r=50, t=50, b=50),
+                        plot_bgcolor='white',
+                        xaxis=dict(gridcolor='lightgray', title="Hours"),
+                        yaxis=dict(gridcolor='lightgray', title="%", range=[0, 100])
+                    )
+                    st.plotly_chart(fig_fuel, use_container_width=True)
+                
+                # Quick actions for the displayed generator
+                st.markdown("**⚡ Quick Actions:**")
+                action_col1, action_col2, action_col3 = st.columns(3)
+                
+                with action_col1:
+                    if st.button("📅 Schedule Service", key="main_schedule", use_container_width=True):
+                        st.success(f"✅ Service scheduled for {primary_generator['serial_number']}")
+                        st.info("🔔 Our service team will contact you within 2 hours")
+                
+                with action_col2:
+                    if primary_generator['operational_status'] == 'FAULT':
+                        if st.button("🚨 Emergency Service", key="main_emergency", use_container_width=True, type="primary"):
+                            st.success(f"🚨 Emergency service dispatched for {primary_generator['serial_number']}")
+                            st.info("☎️ Emergency technician will call within 15 minutes")
+                    else:
+                        if st.button("📞 Contact Support", key="main_support", use_container_width=True):
+                            st.success(f"📞 Support contacted for {primary_generator['serial_number']}")
+                            st.info("🎧 Technical support will respond within 1 hour")
+                
+                with action_col3:
+                    if st.button("📊 Full Report", key="main_report", use_container_width=True):
+                        st.info(f"📊 Generating detailed report for {primary_generator['serial_number']}")
+                        st.info("📧 Report will be emailed within 30 minutes")
+                
+            except Exception as e:
+                st.error("Unable to load sensor trends")
+        
+        # ================================
+        # DETAILED SENSOR DATA SECTION
         # ================================
         st.subheader("📊 Live Sensor Data & Monitoring")
+        st.markdown("Detailed monitoring for all generators in your fleet")
         
         # Generator detailed view
         if not customer_status.empty:
@@ -1813,11 +1982,11 @@ def show_enhanced_customer_portal():
                 try:
                     gen_info = customer_generators[customer_generators['serial_number'] == gen_status['serial_number']].iloc[0]
                     
-                    # Expand first generator or any generator with faults by default
-                    is_expanded = (idx == 0) or (gen_status['operational_status'] == 'FAULT')
+                    # Only expand generators with faults for detailed view
+                    is_expanded = (gen_status['operational_status'] == 'FAULT')
                     
                     # Create expandable section for each generator
-                    with st.expander(f"🔍 {gen_status['serial_number']} - {gen_info['model_series']} - Detailed Sensor View", expanded=is_expanded):
+                    with st.expander(f"🔍 {gen_status['serial_number']} - {gen_info['model_series']} - Detailed View", expanded=is_expanded):
                         
                         col1, col2 = st.columns([1, 2])
                         
@@ -1887,30 +2056,18 @@ def show_enhanced_customer_portal():
                                 if gen_status['fuel_level'] < 50:
                                     st.caption("⚠️ Consider refueling")
                         
-                        # Quick actions for this generator - Enhanced styling
+                        # Simple actions for individual generators
                         st.markdown("---")
-                        st.markdown("**⚡ Quick Actions:**")
-                        action_col1, action_col2, action_col3 = st.columns(3)
+                        st.markdown("**⚡ Generator Actions:**")
+                        individual_col1, individual_col2 = st.columns(2)
                         
-                        with action_col1:
-                            if st.button(f"📅 Schedule Service", key=f"schedule_{gen_status['serial_number']}", use_container_width=True):
-                                st.success(f"✅ Service scheduled for {gen_status['serial_number']}")
-                                st.info("🔔 Our service team will contact you within 2 hours")
+                        with individual_col1:
+                            if st.button(f"📞 Contact for {gen_status['serial_number'][:8]}", key=f"contact_{gen_status['serial_number']}", use_container_width=True):
+                                st.success(f"📞 Support contacted for {gen_status['serial_number']}")
                         
-                        with action_col2:
-                            if gen_status['operational_status'] == 'FAULT':
-                                if st.button(f"🚨 Emergency Service", key=f"emergency_{gen_status['serial_number']}", use_container_width=True, type="primary"):
-                                    st.success(f"🚨 Emergency service dispatched for {gen_status['serial_number']}")
-                                    st.info("☎️ Emergency technician will call within 15 minutes")
-                            else:
-                                if st.button(f"📞 Contact Support", key=f"support_{gen_status['serial_number']}", use_container_width=True):
-                                    st.success(f"📞 Support contacted for {gen_status['serial_number']}")
-                                    st.info("🎧 Technical support will respond within 1 hour")
-                        
-                        with action_col3:
-                            if st.button(f"📊 Full Report", key=f"report_{gen_status['serial_number']}", use_container_width=True):
-                                st.info(f"📊 Generating detailed report for {gen_status['serial_number']}")
-                                st.info("📧 Report will be emailed within 30 minutes")
+                        with individual_col2:
+                            if st.button(f"📋 Service {gen_status['serial_number'][:8]}", key=f"service_{gen_status['serial_number']}", use_container_width=True):
+                                st.success(f"📋 Service scheduled for {gen_status['serial_number']}")
                     
                     st.markdown("---")
                 except Exception:
