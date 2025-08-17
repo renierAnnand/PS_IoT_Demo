@@ -1595,6 +1595,11 @@ def show_system_status(status_df, interval_service_df):
 
 def show_enhanced_customer_portal():
     """Enhanced customer portal with ticket-style alert display."""
+    
+    # IMMEDIATE TEST - FIRST LINE OF FUNCTION
+    st.write("🔥 **CUSTOMER PORTAL FUNCTION IS RUNNING!**")
+    st.write("If you see this message, the function is working.")
+    
     st.title("🏢 Customer Portal - Advanced Generator Monitoring")
     st.markdown("### 🚨 Real-Time Alerts • 📊 Detailed Sensor Data • 🔍 Proactive Monitoring")
     
@@ -1602,6 +1607,8 @@ def show_enhanced_customer_portal():
         # Load data
         generators_df = load_base_generator_data()
         status_df = generate_real_time_status(generators_df)
+        
+        st.write(f"✅ Data loaded: {len(generators_df)} generators, {len(status_df)} status records")
         
         if generators_df.empty:
             st.error("No generator data available. Please contact support.")
@@ -1741,12 +1748,21 @@ def main():
     
     selected_page = st.sidebar.selectbox("Navigate:", list(pages.keys()))
     
+    # DEBUG: Show what page is selected
+    st.sidebar.write(f"**Selected:** {selected_page}")
+    st.sidebar.write(f"**User Role:** {st.session_state.user_role}")
+    
     # Display selected page
     try:
+        st.write(f"🔍 **DEBUG: Calling function for page '{selected_page}'**")
         pages[selected_page]()
+        st.write(f"✅ **DEBUG: Function completed for page '{selected_page}'**")
     except Exception as e:
         st.error(f"Error loading page: {str(e)}")
         st.info("Please try refreshing the page.")
+        # Show the full error for debugging
+        import traceback
+        st.code(traceback.format_exc())
     
     # Sidebar status
     st.sidebar.markdown("---")
