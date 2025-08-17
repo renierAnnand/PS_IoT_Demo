@@ -220,7 +220,7 @@ def load_base_generator_data() -> pd.DataFrame:
 def _generate_enhanced_generator_data() -> Dict:
     """Generate enhanced generator data with comprehensive contact information."""
     
-    # Generate contact information for each customer
+    # Generate contact information for each customer - exactly 8 base contacts
     contact_data = [
         {
             'customer': 'King Faisal Medical City',
@@ -264,7 +264,7 @@ def _generate_enhanced_generator_data() -> Dict:
         }
     ]
     
-    # Extend contact data to cover all 50 generators
+    # Extend contact data to cover all 50 generators - FIXED
     extended_contacts = []
     for i in range(50):
         base_contact = contact_data[i % len(contact_data)]
@@ -283,77 +283,80 @@ def _generate_enhanced_generator_data() -> Dict:
         else:
             extended_contacts.append(base_contact)
     
-    # Expanded customer names for 50 generators
+    # FIXED: Exactly 50 customer names 
     customer_names = [
-        # Major Healthcare Facilities
+        # Major Healthcare Facilities (8)
         'King Faisal Medical City', 'King Abdulaziz Medical City', 'Prince Sultan Hospital', 'Royal Hospital',
         'Specialized Medical Center', 'National Guard Hospital', 'King Saud Medical Complex', 'Al-Amal Hospital',
         
-        # Shopping & Entertainment
+        # Shopping & Entertainment (8)
         'Riyadh Mall Complex', 'Kingdom Centre Mall', 'Al Nakheel Mall', 'Granada Center',
         'Entertainment City', 'Sports Boulevard', 'Qiddiya Venue', 'SPARK Sports',
         
-        # Industrial & Energy
+        # Industrial & Energy (8)
         'SABIC Industrial', 'ARAMCO Office Tower', 'ENOWA Energy Hub', 'Petrochemical Complex',
         'ACWA Power Station', 'Saudi Electric Company', 'Industrial City Jubail', 'Yanbu Industrial',
         
-        # Financial & Government
+        # Financial & Government (8)
         'Al Rajhi Banking HQ', 'SAMA Headquarters', 'PIF Headquarters', 'Ministry Complex',
         'Financial District', 'Diplomatic Quarter', 'Vision 2030 Center', 'Digital Government HQ',
         
-        # Technology & Research
+        # Technology & Research (8)
         'STC Data Center', 'KAUST Research', 'King Saud University', 'KFUPM Campus',
         'Neom Tech Hub', 'AI Research Center', 'Cyber Security Center', 'Innovation District',
         
-        # NEOM & Mega Projects
+        # NEOM & Mega Projects (6)
         'NEOM Construction', 'THE LINE Project', 'Oxagon Port', 'Trojena Resort',
-        'Al-Ula Heritage', 'Diriyah Gate', 'King Salman Park', 'Green Riyadh',
+        'Al-Ula Heritage', 'Diriyah Gate',
         
-        # Infrastructure & Transport
-        'Riyadh Metro Station', 'King Khalid Airport', 'Jeddah Airport', 'Saudi Airlines Hub',
-        'ROSHN Development', 'Mukaab Tower', 'Red Sea Project', 'Amaala Resort'
+        # Infrastructure & Transport (4)
+        'Riyadh Metro Station', 'King Khalid Airport', 'Red Sea Project', 'Amaala Resort'
     ]
     
+    # FIXED: Exactly 50 locations
+    location_cities = [
+        'Riyadh', 'Riyadh', 'Dammam', 'Riyadh', 'Riyadh', 'Jeddah', 'NEOM', 'Al-Ula',
+        'Riyadh', 'Thuwal', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh',
+        'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'NEOM', 'NEOM', 'NEOM', 'Qiddiya',
+        'Al-Ula', 'Qiddiya', 'Riyadh', 'Riyadh', 'Diriyah', 'Riyadh', 'Jeddah', 'Mecca',
+        'Medina', 'Tabuk', 'Abha', 'Jazan', 'Hail', 'Najran', 'Al Khobar', 'Jubail',
+        'Yanbu', 'Taif', 'Buraidah', 'Khamis Mushait', 'Hofuf', 'Hafr Al-Batin', 'Arar', 'Sakaka', 'Jizan', 'Bisha'
+    ]
+    
+    # FIXED: Verify all arrays have exactly 50 elements
     return {
-        'serial_number': [f'PS-{2020 + i//8}-{i:04d}' for i in range(1, 51)],
+        'serial_number': [f'PS-{2020 + i//8}-{i:04d}' for i in range(1, 51)],  # 50 elements
         'model_series': ([
             'PS-2000 Series', 'PS-1500 Series', 'PS-1000 Series', 'PS-800 Series',
             'PS-2500 Industrial', 'PS-2000 Commercial', 'PS-1800 Healthcare', 'PS-1200 Retail',
             'PS-3000 Heavy Duty', 'PS-500 Compact', 'PS-4000 Industrial', 'PS-1600 Standard'
-        ] * 5)[:50],
-        'customer_name': customer_names,
-        'primary_contact_name': [contact['primary_contact_name'] for contact in extended_contacts],
-        'primary_contact_phone': [contact['primary_contact_phone'] for contact in extended_contacts],
-        'primary_contact_email': [contact['primary_contact_email'] for contact in extended_contacts],
-        'alt_contact_name': [contact['alt_contact_name'] for contact in extended_contacts],
-        'alt_contact_phone': [contact['alt_contact_phone'] for contact in extended_contacts],
-        'alt_contact_email': [contact['alt_contact_email'] for contact in extended_contacts],
-        'customer_contact': [contact['primary_contact_email'] for contact in extended_contacts],  # Keep for backward compatibility
+        ] * 5)[:50],  # 60 elements sliced to 50
+        'customer_name': customer_names,  # exactly 50
+        'primary_contact_name': [contact['primary_contact_name'] for contact in extended_contacts],  # 50
+        'primary_contact_phone': [contact['primary_contact_phone'] for contact in extended_contacts],  # 50
+        'primary_contact_email': [contact['primary_contact_email'] for contact in extended_contacts],  # 50
+        'alt_contact_name': [contact['alt_contact_name'] for contact in extended_contacts],  # 50
+        'alt_contact_phone': [contact['alt_contact_phone'] for contact in extended_contacts],  # 50
+        'alt_contact_email': [contact['alt_contact_email'] for contact in extended_contacts],  # 50
+        'customer_contact': [contact['primary_contact_email'] for contact in extended_contacts],  # 50
         'rated_kw': [
             2000, 1500, 1000, 800, 2500, 2000, 1800, 1200, 3000, 500,
             1000, 750, 600, 400, 2200, 1800, 1400, 900, 4000, 1600,
             650, 500, 350, 300, 2800, 2200, 1600, 1100, 3500, 1800,
             850, 700, 450, 380, 320, 280, 4500, 2400, 1900, 1300,
             950, 750, 550, 420, 380, 320, 5000, 2800, 2100, 1700
-        ],
+        ],  # exactly 50
         'service_contract': ([
             'Premium Care', 'Basic Maintenance', 'Preventive Plus', 'No Contract',
             'Premium Care', 'No Contract', 'Preventive Plus', 'Premium Care',
             'Basic Maintenance', 'Premium Care', 'No Contract', 'Basic Maintenance'
-        ] * 5)[:50],
-        'next_service_hours': [random.randint(-200, 800) for _ in range(50)],
-        'total_runtime_hours': [random.randint(2000, 15000) for _ in range(50)],
-        'location_city': ([
-            'Riyadh', 'Riyadh', 'Dammam', 'Riyadh', 'Riyadh', 'Jeddah', 'NEOM', 'Al-Ula',
-            'Riyadh', 'Thuwal', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh',
-            'Riyadh', 'Riyadh', 'Riyadh', 'Riyadh', 'NEOM', 'NEOM', 'NEOM', 'Qiddiya',
-            'Al-Ula', 'Qiddiya', 'Riyadh', 'Riyadh', 'Diriyah', 'Riyadh', 'Jeddah', 'Mecca',
-            'Medina', 'Tabuk', 'Abha', 'Jazan', 'Hail', 'Najran', 'Al Khobar', 'Jubail',
-            'Yanbu', 'Taif', 'Buraidah', 'Khamis Mushait', 'Hofuf', 'Hafr Al-Batin', 'Arar', 'Sakaka', 'Jizan', 'Bisha'
-        ])[:50],
+        ] * 5)[:50],  # 60 elements sliced to 50
+        'next_service_hours': [random.randint(-200, 800) for _ in range(50)],  # 50
+        'total_runtime_hours': [random.randint(2000, 15000) for _ in range(50)],  # 50
+        'location_city': location_cities,  # exactly 50
         'installation_date': [
             datetime.now() - timedelta(days=random.randint(365, 2555)) for _ in range(50)
-        ]
+        ]  # 50
     }
 
 @st.cache_data(ttl=60)  # Update every minute for real-time feel
@@ -1592,6 +1595,11 @@ def show_system_status(status_df, interval_service_df):
 
 def show_enhanced_customer_portal():
     """Enhanced customer portal with ticket-style alert display."""
+    
+    # IMMEDIATE TEST - FIRST LINE OF FUNCTION
+    st.write("🔥 **CUSTOMER PORTAL FUNCTION IS RUNNING!**")
+    st.write("If you see this message, the function is working.")
+    
     st.title("🏢 Customer Portal - Advanced Generator Monitoring")
     st.markdown("### 🚨 Real-Time Alerts • 📊 Detailed Sensor Data • 🔍 Proactive Monitoring")
     
@@ -1599,6 +1607,8 @@ def show_enhanced_customer_portal():
         # Load data
         generators_df = load_base_generator_data()
         status_df = generate_real_time_status(generators_df)
+        
+        st.write(f"✅ Data loaded: {len(generators_df)} generators, {len(status_df)} status records")
         
         if generators_df.empty:
             st.error("No generator data available. Please contact support.")
@@ -1617,168 +1627,6 @@ def show_enhanced_customer_portal():
             return
         
         st.markdown(f"### Welcome, {selected_customer}")
-        
-        # ================================
-        # TICKET-STYLE ALERTS SECTION
-        # ================================
-        st.subheader("🚨 Active Alerts")
-        
-        # Get active alerts
-        fault_alerts = customer_status[customer_status['operational_status'] == 'FAULT']
-        warning_alerts = customer_status[
-            (customer_status['oil_pressure'] < 28) | 
-            (customer_status['coolant_temp'] > 95) | 
-            (customer_status['vibration'] > 4.0) | 
-            (customer_status['fuel_level'] < 30)
-        ]
-        
-        # Create ticket-style alert table
-        alert_tickets = []
-        
-        # Add critical fault tickets
-        for _, alert in fault_alerts.iterrows():
-            try:
-                # Get generator info
-                gen_info = customer_generators[customer_generators['serial_number'] == alert['serial_number']]
-                if not gen_info.empty:
-                    gen_data = gen_info.iloc[0]
-                    primary_contact_name = gen_data.get('primary_contact_name', 'N/A')
-                    primary_contact_phone = gen_data.get('primary_contact_phone', 'N/A')
-                    primary_contact_email = gen_data.get('primary_contact_email', 'N/A')
-                else:
-                    primary_contact_name = primary_contact_phone = primary_contact_email = 'N/A'
-                
-                alert_tickets.append({
-                    'Ticket ID': f"TK-{random.randint(10000, 99999)}",
-                    'Type': "🚨 FAULT RESPONSE",
-                    'Generator': alert['serial_number'],
-                    'Customer': selected_customer,
-                    'Primary Contact': primary_contact_name,
-                    'Contact Email': primary_contact_email,
-                    'Contact Phone': primary_contact_phone,
-                    'Service Detail': alert['fault_description'],
-                    'Runtime Hours': f"{alert.get('runtime_hours', 5000):,} hrs",
-                    'Parts Needed': 'TBD',
-                    'Priority': 'CRITICAL',
-                    'Status': 'Requires immediate attention',
-                    'Auto-Response': 'Emergency service has been notified',
-                    'ETA': 'Technician will contact you within 30 minutes'
-                })
-            except Exception:
-                continue
-        
-        # Add warning tickets (exclude generators that already have fault alerts)
-        warning_alerts_filtered = warning_alerts[~warning_alerts['serial_number'].isin(fault_alerts['serial_number'])] if not fault_alerts.empty else warning_alerts
-        for _, warning in warning_alerts_filtered.iterrows():
-            try:
-                # Get generator info
-                gen_info = customer_generators[customer_generators['serial_number'] == warning['serial_number']]
-                if not gen_info.empty:
-                    gen_data = gen_info.iloc[0]
-                    primary_contact_name = gen_data.get('primary_contact_name', 'N/A')
-                    primary_contact_phone = gen_data.get('primary_contact_phone', 'N/A')
-                    primary_contact_email = gen_data.get('primary_contact_email', 'N/A')
-                else:
-                    primary_contact_name = primary_contact_phone = primary_contact_email = 'N/A'
-                
-                # Build warning details
-                warning_details = []
-                if warning['oil_pressure'] < 28:
-                    warning_details.append(f"Low oil pressure: {warning['oil_pressure']} PSI")
-                if warning['coolant_temp'] > 95:
-                    warning_details.append(f"High coolant temperature: {warning['coolant_temp']}°C")
-                if warning['vibration'] > 4.0:
-                    warning_details.append(f"High vibration: {warning['vibration']} mm/s")
-                if warning['fuel_level'] < 30:
-                    warning_details.append(f"Low fuel: {warning['fuel_level']}%")
-                
-                alert_tickets.append({
-                    'Ticket ID': f"TK-{random.randint(10000, 99999)}",
-                    'Type': "⚠️ SENSOR WARNING", 
-                    'Generator': warning['serial_number'],
-                    'Customer': selected_customer,
-                    'Primary Contact': primary_contact_name,
-                    'Contact Email': primary_contact_email,
-                    'Contact Phone': primary_contact_phone,
-                    'Service Detail': ', '.join(warning_details),
-                    'Runtime Hours': f"{warning.get('runtime_hours', 5000):,} hrs",
-                    'Parts Needed': 'Monitor for now',
-                    'Priority': 'HIGH',
-                    'Status': 'Monitor closely, consider maintenance scheduling',
-                    'Auto-Response': 'Monitoring system active',
-                    'ETA': 'Technician available if needed'
-                })
-            except Exception:
-                continue
-        
-        # Display alerts in ticket format
-        if alert_tickets:
-            # Show summary metrics
-            critical_count = len([t for t in alert_tickets if t['Priority'] == 'CRITICAL'])
-            warning_count = len([t for t in alert_tickets if t['Priority'] == 'HIGH'])
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("🚨 Critical Faults", critical_count, delta="⚠️ Immediate attention" if critical_count > 0 else None)
-            with col2:
-                st.metric("⚠️ Warnings", warning_count, delta="🔍 Monitor closely" if warning_count > 0 else None)
-            with col3:
-                st.metric("📋 Total Alerts", len(alert_tickets))
-            
-            st.markdown(f"""
-            <div class="ticket-card">
-                <h4>🎫 Active Alert Tickets</h4>
-                <p>Showing {len(alert_tickets)} active alerts for your generators</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Convert to DataFrame and display
-            alerts_df = pd.DataFrame(alert_tickets)
-            st.dataframe(alerts_df, use_container_width=True, hide_index=True)
-            
-            # Quick action buttons for customer
-            st.markdown("#### ⚡ Quick Actions")
-            action_col1, action_col2, action_col3, action_col4 = st.columns(4)
-            
-            with action_col1:
-                if st.button("🚨 Emergency Service", use_container_width=True, type="primary"):
-                    st.success("🚨 Emergency service request submitted!")
-                    st.info("☎️ Emergency technician will call within 15 minutes")
-            
-            with action_col2:
-                if st.button("📅 Schedule Service", use_container_width=True):
-                    st.success("📅 Service scheduling request submitted!")
-                    st.info("🔔 Service coordinator will contact you within 2 hours")
-            
-            with action_col3:
-                if st.button("📞 Contact Support", use_container_width=True):
-                    st.success("📞 Support ticket created!")
-                    st.info("🎧 Technical support will respond within 1 hour")
-            
-            with action_col4:
-                if st.button("📧 Email Report", use_container_width=True):
-                    st.success("📧 Alert report emailed!")
-                    st.info("📨 Detailed report sent to your email")
-        
-        else:
-            # Show all clear status in ticket format
-            st.markdown("""
-            <div class="revenue-opportunity">
-                <h4>✅ All Generators Operating Normally</h4>
-                <p>No active alerts detected • Proactive monitoring system active 24/7</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Show a placeholder "no alerts" table
-            no_alerts_data = [{
-                'Status': '✅ All Clear',
-                'Generator Count': len(customer_generators),
-                'Monitoring': '24/7 Active',
-                'Last Check': datetime.now().strftime('%H:%M:%S'),
-                'Next Check': (datetime.now() + timedelta(minutes=5)).strftime('%H:%M:%S')
-            }]
-            
-            st.dataframe(pd.DataFrame(no_alerts_data), use_container_width=True, hide_index=True)
         
         # Customer summary metrics - Updated for expanded dataset
         st.subheader("📊 Your Generator Fleet Overview")
@@ -1802,319 +1650,8 @@ def show_enhanced_customer_portal():
         with col5:
             st.metric("Average Load", f"{avg_load:.1f}%")
         
-        # ================================
-        # 24-HOUR SENSOR TRENDS - MAIN SECTION
-        # ================================
-        st.subheader("📈 24-Hour Sensor Trends")
-        st.markdown("Real-time monitoring and historical data for your generator fleet")
-        
-        if not customer_status.empty:
-            # Show trends for the first generator or any generator with issues
-            primary_generator = None
-            for _, gen_status in customer_status.iterrows():
-                if gen_status['operational_status'] == 'FAULT':
-                    primary_generator = gen_status
-                    break
-            
-            if primary_generator is None:
-                primary_generator = customer_status.iloc[0]
-            
-            # Get generator info
-            try:
-                gen_info = customer_generators[customer_generators['serial_number'] == primary_generator['serial_number']].iloc[0]
-                
-                st.info(f"📊 **Displaying trends for:** {primary_generator['serial_number']} - {gen_info['model_series']} ({gen_info['rated_kw']} kW)")
-                
-                # Create sample trend data for primary generator
-                import numpy as np
-                np.random.seed(hash(primary_generator['serial_number']) % 2**32)
-                hours = list(range(24))
-                
-                # Simulate realistic trends with more variation
-                base_oil = primary_generator['oil_pressure']
-                base_temp = primary_generator['coolant_temp']
-                base_vib = primary_generator['vibration']
-                base_fuel = primary_generator['fuel_level']
-                
-                # More realistic trend patterns
-                oil_trend = [max(20, min(35, base_oil + np.random.normal(0, 1) + 2*np.sin(h/24*2*np.pi))) for h in hours]
-                temp_trend = [max(70, min(110, base_temp + np.random.normal(0, 2) + 5*np.sin((h-12)/24*2*np.pi))) for h in hours]
-                vib_trend = [max(0.5, min(6, base_vib + np.random.normal(0, 0.3) + 0.5*np.sin(h/24*4*np.pi))) for h in hours]
-                fuel_trend = [max(10, min(100, base_fuel - h*0.5 + np.random.normal(0, 1))) for h in hours]
-                
-                # Display the main trend charts
-                trend_col1, trend_col2 = st.columns(2)
-                
-                with trend_col1:
-                    # Oil pressure trend - Enhanced styling
-                    fig_oil = go.Figure()
-                    fig_oil.add_trace(go.Scatter(
-                        x=hours, y=oil_trend, 
-                        mode='lines+markers', 
-                        name='Oil Pressure',
-                        line=dict(color='#1f77b4', width=3),
-                        marker=dict(size=6, color='#1f77b4')
-                    ))
-                    fig_oil.add_hline(
-                        y=25, line_dash="dash", line_color="red", line_width=2,
-                        annotation_text="Min Threshold", annotation_position="bottom right"
-                    )
-                    fig_oil.update_layout(
-                        title="Oil Pressure (PSI)", 
-                        height=250,
-                        showlegend=False, 
-                        margin=dict(l=50, r=50, t=50, b=50),
-                        plot_bgcolor='white',
-                        xaxis=dict(gridcolor='lightgray', title="Hours"),
-                        yaxis=dict(gridcolor='lightgray', title="PSI", range=[20, 40])
-                    )
-                    st.plotly_chart(fig_oil, use_container_width=True)
-                    
-                    # Vibration trend - Enhanced styling
-                    fig_vib = go.Figure()
-                    fig_vib.add_trace(go.Scatter(
-                        x=hours, y=vib_trend, 
-                        mode='lines+markers', 
-                        name='Vibration',
-                        line=dict(color='#9467bd', width=3),
-                        marker=dict(size=6, color='#9467bd')
-                    ))
-                    fig_vib.add_hline(
-                        y=4.0, line_dash="dash", line_color="orange", line_width=2,
-                        annotation_text="Warning Level", annotation_position="bottom right"
-                    )
-                    fig_vib.update_layout(
-                        title="Vibration (mm/s)", 
-                        height=250,
-                        showlegend=False, 
-                        margin=dict(l=50, r=50, t=50, b=50),
-                        plot_bgcolor='white',
-                        xaxis=dict(gridcolor='lightgray', title="Hours"),
-                        yaxis=dict(gridcolor='lightgray', title="mm/s", range=[0, 7])
-                    )
-                    st.plotly_chart(fig_vib, use_container_width=True)
-                
-                with trend_col2:
-                    # Temperature trend - Enhanced styling
-                    fig_temp = go.Figure()
-                    fig_temp.add_trace(go.Scatter(
-                        x=hours, y=temp_trend, 
-                        mode='lines+markers', 
-                        name='Temperature',
-                        line=dict(color='#d62728', width=3),
-                        marker=dict(size=6, color='#d62728')
-                    ))
-                    fig_temp.add_hline(
-                        y=95, line_dash="dash", line_color="orange", line_width=2,
-                        annotation_text="Warning Level", annotation_position="bottom right"
-                    )
-                    fig_temp.update_layout(
-                        title="Coolant Temperature (°C)", 
-                        height=250,
-                        showlegend=False, 
-                        margin=dict(l=50, r=50, t=50, b=50),
-                        plot_bgcolor='white',
-                        xaxis=dict(gridcolor='lightgray', title="Hours"),
-                        yaxis=dict(gridcolor='lightgray', title="°C", range=[70, 115])
-                    )
-                    st.plotly_chart(fig_temp, use_container_width=True)
-                    
-                    # Fuel level trend - Enhanced styling
-                    fig_fuel = go.Figure()
-                    fig_fuel.add_trace(go.Scatter(
-                        x=hours, y=fuel_trend, 
-                        mode='lines+markers', 
-                        name='Fuel Level',
-                        line=dict(color='#2ca02c', width=3),
-                        marker=dict(size=6, color='#2ca02c')
-                    ))
-                    fig_fuel.add_hline(
-                        y=20, line_dash="dash", line_color="red", line_width=2,
-                        annotation_text="Low Fuel", annotation_position="bottom right"
-                    )
-                    fig_fuel.update_layout(
-                        title="Fuel Level (%)", 
-                        height=250,
-                        showlegend=False, 
-                        margin=dict(l=50, r=50, t=50, b=50),
-                        plot_bgcolor='white',
-                        xaxis=dict(gridcolor='lightgray', title="Hours"),
-                        yaxis=dict(gridcolor='lightgray', title="%", range=[0, 100])
-                    )
-                    st.plotly_chart(fig_fuel, use_container_width=True)
-                
-                # Quick actions for the displayed generator
-                st.markdown("**⚡ Quick Actions:**")
-                action_col1, action_col2, action_col3 = st.columns(3)
-                
-                with action_col1:
-                    if st.button("📅 Schedule Service", key="main_schedule", use_container_width=True):
-                        st.success(f"✅ Service scheduled for {primary_generator['serial_number']}")
-                        st.info("🔔 Our service team will contact you within 2 hours")
-                
-                with action_col2:
-                    if primary_generator['operational_status'] == 'FAULT':
-                        if st.button("🚨 Emergency Service", key="main_emergency", use_container_width=True, type="primary"):
-                            st.success(f"🚨 Emergency service dispatched for {primary_generator['serial_number']}")
-                            st.info("☎️ Emergency technician will call within 15 minutes")
-                    else:
-                        if st.button("📞 Contact Support", key="main_support", use_container_width=True):
-                            st.success(f"📞 Support contacted for {primary_generator['serial_number']}")
-                            st.info("🎧 Technical support will respond within 1 hour")
-                
-                with action_col3:
-                    if st.button("📊 Full Report", key="main_report", use_container_width=True):
-                        st.info(f"📊 Generating detailed report for {primary_generator['serial_number']}")
-                        st.info("📧 Report will be emailed within 30 minutes")
-                
-            except Exception as e:
-                st.error("Unable to load sensor trends")
-        
-        # ================================
-        # DETAILED SENSOR DATA SECTION
-        # ================================
-        st.subheader("📊 Live Sensor Data & Monitoring")
-        st.markdown("Detailed monitoring for all generators in your fleet")
-        
-        # Generator detailed view
-        if not customer_status.empty:
-            for idx, (_, gen_status) in enumerate(customer_status.iterrows()):
-                try:
-                    gen_info = customer_generators[customer_generators['serial_number'] == gen_status['serial_number']].iloc[0]
-                    
-                    # Only expand generators with faults for detailed view
-                    is_expanded = (gen_status['operational_status'] == 'FAULT')
-                    
-                    # Create expandable section for each generator
-                    with st.expander(f"🔍 {gen_status['serial_number']} - {gen_info['model_series']} - Detailed View", expanded=is_expanded):
-                        
-                        col1, col2 = st.columns([1, 2])
-                        
-                        with col1:
-                            # Generator basic info
-                            if gen_status['operational_status'] == 'RUNNING':
-                                status_icon = "🟢 RUNNING"
-                                status_detail = f"Load: {gen_status['load_percent']}% | All systems normal"
-                            elif gen_status['operational_status'] == 'FAULT':
-                                status_icon = "🔴 FAULT"
-                                status_detail = f"⚠️ {gen_status['fault_description']}"
-                            elif gen_status['operational_status'] == 'STANDBY':
-                                status_icon = "⚪ STANDBY"
-                                status_detail = "Generator ready - Not currently needed"
-                            else:
-                                status_icon = "🟡 MAINTENANCE"
-                                status_detail = "Scheduled maintenance in progress"
-                            
-                            st.markdown(f"""
-                            **Generator Status:** {status_icon}  
-                            **Model:** {gen_info['model_series']}  
-                            **Capacity:** {gen_info['rated_kw']} kW  
-                            **Location:** {gen_info['location_city']}  
-                            **Runtime:** {gen_status.get('runtime_hours', 5000):,} hours  
-                            **Status Detail:** {status_detail}
-                            """)
-                        
-                        with col2:
-                            # Detailed sensor data with color coding
-                            st.markdown("**🔍 Live Sensor Readings:**")
-                            
-                            sensor_col1, sensor_col2, sensor_col3, sensor_col4 = st.columns(4)
-                            
-                            with sensor_col1:
-                                oil_color = "🟢" if gen_status['oil_pressure'] >= 28 else "🟡" if gen_status['oil_pressure'] >= 25 else "🔴"
-                                oil_status = "Normal" if gen_status['oil_pressure'] >= 28 else "Warning" if gen_status['oil_pressure'] >= 25 else "Critical"
-                                st.metric("🛢️ Oil Pressure", f"{gen_status['oil_pressure']} PSI", delta=f"{oil_color} {oil_status}")
-                                
-                                st.caption("Normal: 28-35 PSI")
-                                if gen_status['oil_pressure'] < 28:
-                                    st.caption("⚠️ Below normal range")
-                            
-                            with sensor_col2:
-                                temp_color = "🟢" if gen_status['coolant_temp'] <= 95 else "🟡" if gen_status['coolant_temp'] <= 105 else "🔴"
-                                temp_status = "Normal" if gen_status['coolant_temp'] <= 95 else "Warning" if gen_status['coolant_temp'] <= 105 else "Critical"
-                                st.metric("🌡️ Coolant Temp", f"{gen_status['coolant_temp']}°C", delta=f"{temp_color} {temp_status}")
-                                
-                                st.caption("Normal: 75-95°C")
-                                if gen_status['coolant_temp'] > 95:
-                                    st.caption("⚠️ Above normal range")
-                            
-                            with sensor_col3:
-                                vib_color = "🟢" if gen_status['vibration'] <= 4.0 else "🟡" if gen_status['vibration'] <= 5.0 else "🔴"
-                                vib_status = "Normal" if gen_status['vibration'] <= 4.0 else "Warning" if gen_status['vibration'] <= 5.0 else "Critical"
-                                st.metric("🔧 Vibration", f"{gen_status['vibration']} mm/s", delta=f"{vib_color} {vib_status}")
-                                
-                                st.caption("Normal: 1.0-4.0 mm/s")
-                                if gen_status['vibration'] > 4.0:
-                                    st.caption("⚠️ Above normal range")
-                            
-                            with sensor_col4:
-                                fuel_color = "🟢" if gen_status['fuel_level'] >= 50 else "🟡" if gen_status['fuel_level'] >= 20 else "🔴"
-                                fuel_status = "Normal" if gen_status['fuel_level'] >= 50 else "Low" if gen_status['fuel_level'] >= 20 else "Critical"
-                                st.metric("⛽ Fuel Level", f"{gen_status['fuel_level']}%", delta=f"{fuel_color} {fuel_status}")
-                                
-                                st.caption("Normal: >50%")
-                                if gen_status['fuel_level'] < 50:
-                                    st.caption("⚠️ Consider refueling")
-                        
-                        # Simple actions for individual generators
-                        st.markdown("---")
-                        st.markdown("**⚡ Generator Actions:**")
-                        individual_col1, individual_col2 = st.columns(2)
-                        
-                        with individual_col1:
-                            if st.button(f"📞 Contact for {gen_status['serial_number'][:8]}", key=f"contact_{gen_status['serial_number']}", use_container_width=True):
-                                st.success(f"📞 Support contacted for {gen_status['serial_number']}")
-                        
-                        with individual_col2:
-                            if st.button(f"📋 Service {gen_status['serial_number'][:8]}", key=f"service_{gen_status['serial_number']}", use_container_width=True):
-                                st.success(f"📋 Service scheduled for {gen_status['serial_number']}")
-                    
-                    st.markdown("---")
-                except Exception:
-                    continue
-        
-        # ================================
-        # ALERT SETTINGS & PREFERENCES (unchanged)
-        # ================================
-        st.subheader("⚙️ Alert Settings & Preferences")
-        
-        with st.expander("🔔 Customize Your Alert Preferences", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**📱 Notification Methods**")
-                email_alerts = st.checkbox("📧 Email Alerts", value=True)
-                sms_alerts = st.checkbox("📱 SMS Alerts", value=True)
-                phone_alerts = st.checkbox("📞 Emergency Phone Calls", value=True)
-                
-                st.markdown("**⏰ Alert Frequency**")
-                immediate_critical = st.checkbox("🚨 Immediate (Critical Faults)", value=True)
-                hourly_warnings = st.checkbox("⏰ Hourly (Warnings)", value=True)
-                daily_reports = st.checkbox("📅 Daily Status Reports", value=True)
-            
-            with col2:
-                st.markdown("**🎯 Custom Thresholds**")
-                oil_threshold = st.slider("Oil Pressure Alert (PSI)", 20, 30, 25)
-                temp_threshold = st.slider("Temperature Alert (°C)", 85, 100, 95)
-                vib_threshold = st.slider("Vibration Alert (mm/s)", 3.0, 5.0, 4.0, step=0.1)
-                fuel_threshold = st.slider("Fuel Level Alert (%)", 15, 40, 25)
-                
-                if st.button("💾 Save Alert Settings", use_container_width=True, type="primary"):
-                    st.success("✅ Alert preferences saved successfully!")
-        
         # Enhanced Service & Support
         st.subheader("🛠️ Service & Support Center")
-        
-        # Service statistics based on current status
-        fault_count_service = len(customer_status[customer_status['operational_status'] == 'FAULT'])
-        warning_count_service = len(warning_alerts_filtered) if 'warning_alerts_filtered' in locals() else 0
-        
-        if fault_count_service > 0:
-            st.error(f"🚨 **{fault_count_service} Critical Issues** - Emergency service automatically notified")
-        elif warning_count_service > 0:
-            st.warning(f"⚠️ **{warning_count_service} Warnings** - Recommend scheduling preventive maintenance")
-        else:
-            st.success("✅ **All Systems Normal** - Proactive monitoring active")
         
         # Service action buttons
         service_col1, service_col2, service_col3, service_col4 = st.columns(4)
@@ -2211,12 +1748,21 @@ def main():
     
     selected_page = st.sidebar.selectbox("Navigate:", list(pages.keys()))
     
+    # DEBUG: Show what page is selected
+    st.sidebar.write(f"**Selected:** {selected_page}")
+    st.sidebar.write(f"**User Role:** {st.session_state.user_role}")
+    
     # Display selected page
     try:
+        st.write(f"🔍 **DEBUG: Calling function for page '{selected_page}'**")
         pages[selected_page]()
+        st.write(f"✅ **DEBUG: Function completed for page '{selected_page}'**")
     except Exception as e:
         st.error(f"Error loading page: {str(e)}")
         st.info("Please try refreshing the page.")
+        # Show the full error for debugging
+        import traceback
+        st.code(traceback.format_exc())
     
     # Sidebar status
     st.sidebar.markdown("---")
